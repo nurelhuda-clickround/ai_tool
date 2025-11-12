@@ -68,25 +68,9 @@ def get_cpu_sentence_transformer(model_name="all-MiniLM-L6-v2"):
     """
     Load SentenceTransformer safely on CPU to avoid 'meta tensor' errors.
     """
-    import torch
-    from sentence_transformers import SentenceTransformer
-
-    # Use torch.no_grad + safe CPU initialization
     device = torch.device("cpu")
-    try:
-        model = SentenceTransformer(model_name, device=device)
-    except NotImplementedError:
-        # Some environments give NotImplementedError on meta tensor
-        # Use from_pretrained + device_map="cpu"
-        from transformers import AutoModel, AutoTokenizer
-        from sentence_transformers import models, SentenceTransformer
-
-        word_embedding_model = models.Transformer(model_name, device=device)
-        pooling_model = models.Pooling(word_embedding_model.get_word_embedding_dimension())
-        model = SentenceTransformer(modules=[word_embedding_model, pooling_model])
-    
+    model = SentenceTransformer(model_name, device=device)
     return model
-
 
 def get_cpu_huggingface_embeddings(model_name="sentence-transformers/all-MiniLM-L6-v2"):
     """
