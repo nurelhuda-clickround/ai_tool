@@ -46,9 +46,9 @@ MYSQL_PORT = os.getenv("MYSQL_PORT", "3306")
 
 # Access API credentials
 API_BASE_URL = os.getenv("API_BASE_URL", "http://192.168.10.82/hxa/ai_api/index.php")
-# API_KEY = os.getenv("API_KEY")
+API_KEY = os.getenv("API_KEY")
 
-# # Access OpenAI API key
+# Access OpenAI API key
 api_key = os.getenv("OPENAI_API_KEY")
 os.environ["OPENAI_API_KEY"] = api_key
 
@@ -130,74 +130,74 @@ def build_index(data_folder="data"):
         index = faiss.IndexFlatIP(dim)
     return docs, metadata
 
-# def get_api_tool(memory=None):
-#     """
-#     ERP API tool that dynamically fetches raw JSON data.
-#     No counts, sums, or aggregations are computed in the code.
-#     The LLM must interpret the raw JSON itself to compute counts, sums, maximums, or any other metrics.
-#     """
-#     def call_api(query: str) -> str:
-#         try:
-#             # Step 1: Ask LLM which endpoints to call
-#             classification_prompt = f"""
-#                 You are a strict JSON generator.
-#                 Return ONLY a JSON list (no text, no explanation).
-#                 Options: {list(API_ENDPOINTS.keys())}
-#                 Query: {query}
-#                 Example: ["invoices", "sales_orders"]
-#                 """
-#             classification = llm.invoke(classification_prompt).content.strip()
-#             try:
-#                 endpoints = json.loads(classification)
-#             except json.JSONDecodeError:
-#                 return "No relevant data found in the sources."
+def get_api_tool(memory=None):
+    """
+    ERP API tool that dynamically fetches raw JSON data.
+    No counts, sums, or aggregations are computed in the code.
+    The LLM must interpret the raw JSON itself to compute counts, sums, maximums, or any other metrics.
+    """
+    def call_api(query: str) -> str:
+        try:
+            # Step 1: Ask LLM which endpoints to call
+            classification_prompt = f"""
+                You are a strict JSON generator.
+                Return ONLY a JSON list (no text, no explanation).
+                Options: {list(API_ENDPOINTS.keys())}
+                Query: {query}
+                Example: ["invoices", "sales_orders"]
+                """
+            classification = llm.invoke(classification_prompt).content.strip()
+            try:
+                endpoints = json.loads(classification)
+            except json.JSONDecodeError:
+                return "No relevant data found in the sources."
 
-#             if not endpoints:
-#                 return "No relevant data found in the sources."
+            if not endpoints:
+                return "No relevant data found in the sources."
 
-#             # Step 2: Call all selected endpoints
-#             results = {}
-#             for endpoint in endpoints:
-#                 if endpoint not in API_ENDPOINTS:
-#                     results[endpoint] = {"error": f"Endpoint {endpoint} not found."}
-#                     continue
+            # Step 2: Call all selected endpoints
+            results = {}
+            for endpoint in endpoints:
+                if endpoint not in API_ENDPOINTS:
+                    results[endpoint] = {"error": f"Endpoint {endpoint} not found."}
+                    continue
 
-#                 config = API_ENDPOINTS[endpoint]
-#                 headers = {
-#                     "Authorization": f"Bearer {API_KEY}" if API_KEY else "",
-#                     "API-Key": API_KEY if API_KEY else "",
-#                     "Content-Type": "application/json"
-#                 }
+                config = API_ENDPOINTS[endpoint]
+                headers = {
+                    "Authorization": f"Bearer {API_KEY}" if API_KEY else "",
+                    "API-Key": API_KEY if API_KEY else "",
+                    "Content-Type": "application/json"
+                }
 
-#                 try:
-#                     response = requests.get(config["url"], headers=headers, timeout=10)
-#                     response.raise_for_status()
-#                     data = response.json()
-#                     results[endpoint] = data
-#                 except requests.exceptions.RequestException as e:
-#                     results[endpoint] = {"error": f"API unavailable for {endpoint}: {str(e)}"}
+                try:
+                    response = requests.get(config["url"], headers=headers, timeout=10)
+                    response.raise_for_status()
+                    data = response.json()
+                    results[endpoint] = data
+                except requests.exceptions.RequestException as e:
+                    results[endpoint] = {"error": f"API unavailable for {endpoint}: {str(e)}"}
 
-#             # Step 3: Hand raw data directly to LLM
-#             llm_prompt =  f"""
-#                 JSON DATA: {json.dumps(results)}
+            # Step 3: Hand raw data directly to LLM
+            llm_prompt =  f"""
+                JSON DATA: {json.dumps(results)}
 
-#                 Question: {query}
+                Question: {query}
 
-#                 Fill all numeric fields exactly from the JSON provided. 
-#                 Do not skip any entries. Do not summarize. 
-#                 explain the result.
-#                 """
-#             answer = llm.invoke(llm_prompt).content.strip()
-#             return f"FINAL_ANSWER: {answer}"
+                Fill all numeric fields exactly from the JSON provided. 
+                Do not skip any entries. Do not summarize. 
+                explain the result.
+                """
+            answer = llm.invoke(llm_prompt).content.strip()
+            return f"FINAL_ANSWER: {answer}"
 
-#         except Exception as e:
-#             return f"Unexpected error in API tool: {str(e)}"
+        except Exception as e:
+            return f"Unexpected error in API tool: {str(e)}"
 
-#     return Tool(
-#         name="erp_api_tool",
-#         func=call_api,
-#         description="Fetches raw ERP data (JSON). No pre-computed metrics — the AI must compute counts, sums, maximums, etc. dynamically."
-#     )
+    return Tool(
+        name="erp_api_tool",
+        func=call_api,
+        description="Fetches raw ERP data (JSON). No pre-computed metrics — the AI must compute counts, sums, maximums, etc. dynamically."
+    )
 
 def get_sqlite_tool(memory=None):
     db = SQLDatabase.from_uri("sqlite:///structured_data.db")
