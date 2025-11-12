@@ -294,19 +294,14 @@ def get_retriever_tool(docs, metadata, memory=None):
             device=None  # Let SentenceTransformer handle device placement initially
         )
         # Explicitly move the model to CPU using to_empty if needed
-        if torch.cuda.is_available():
-            # Move model to GPU if available
-            embedding_model = embedding_model.to('cuda')
-        else:
-            # CPU-only environment: handle 'meta' device or normal CPU move
-            if embedding_model.device.type == 'meta':
-                embedding_model = embedding_model.to_empty(device='cpu')  # Initialize on CPU
-            else:
-                embedding_model = embedding_model.to('cpu')  # Move to CPU
-        # Wrap the SentenceTransformer in HuggingFaceEmbeddings
+        embedding_model = SentenceTransformer(
+            'sentence-transformers/all-MiniLM-L6-v2',
+            device='cpu'  # explicitly force CPU
+        )
+         # Wrap the SentenceTransformer in HuggingFaceEmbeddings
         embedding_wrapper = HuggingFaceEmbeddings(
             model_name='sentence-transformers/all-MiniLM-L6-v2',
-            model_kwargs={'device': 'cpu'},
+            model_kwargs={'device': 'cpu'},  # ensure CPU
             encode_kwargs={'normalize_embeddings': True}
         )
         print("Embeddings initialized successfully.")
