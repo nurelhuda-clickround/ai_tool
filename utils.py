@@ -43,11 +43,11 @@ load_dotenv()
 # MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD")
 # MYSQL_DATABASE = os.getenv("MYSQL_DATABASE")
 # MYSQL_PORT = os.getenv("MYSQL_PORT", "3306")
-db_user = st.secrets["MYSQL_USER"]
-db_password = st.secrets["MYSQL_PASSWORD"]
-db_host = st.secrets["MYSQL_HOST"]
-db_port = st.secrets["MYSQL_PORT"]
-db_name = st.secrets["MYSQL_DATABASE"]
+db_user = st.secrets["mysql"]["MYSQL_USER"]
+db_password = st.secrets["mysql"]["MYSQL_PASSWORD"]
+db_host = st.secrets["mysql"]["MYSQL_HOST"]
+db_port = st.secrets["mysql"]["MYSQL_PORT"]
+db_name = st.secrets["mysql"]["MYSQL_DATABASE"]
 # Access API credentials
 # API_BASE_URL = os.getenv("API_BASE_URL", "http://192.168.10.82/hxa/ai_api/index.php")
 # API_KEY = os.getenv("API_KEY")
@@ -279,7 +279,7 @@ def get_mysql_tool(memory=None, db_uri=None):
     )
 
 def list_mysql_tables():
-    db_uri = f"mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DATABASE}"
+    db_uri = f"mysql+pymysql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
     engine = create_engine(db_uri)
     inspector = inspect(engine)
     print("Tables in DB:", inspector.get_table_names())
@@ -343,7 +343,7 @@ def get_multi_agent(_, docs, metadata, db_uri=None, memory=None, conversation_hi
                 memory.chat_memory.add_ai_message(msg["content"])
 
     if db_uri is None:
-        db_uri = f"mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DATABASE}"
+        db_uri = f"mysql+pymysql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
 
     tools = [
         get_mysql_tool(memory, db_uri),
