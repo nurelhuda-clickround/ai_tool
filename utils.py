@@ -43,11 +43,11 @@ load_dotenv()
 # MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD")
 # MYSQL_DATABASE = os.getenv("MYSQL_DATABASE")
 # MYSQL_PORT = os.getenv("MYSQL_PORT", "3306")
-db_user = st.secrets["mysql"]["MYSQL_USER"]
-db_password = st.secrets["mysql"]["MYSQL_PASSWORD"]
-db_host = st.secrets["mysql"]["MYSQL_HOST"]
-db_port = st.secrets["mysql"]["MYSQL_PORT"]
-db_name = st.secrets["mysql"]["MYSQL_DATABASE"]
+db_user = st.secrets["MYSQL_USER"]
+db_password = st.secrets["MYSQL_PASSWORD"]
+db_host = st.secrets["MYSQL_HOST"]
+db_port = st.secrets["MYSQL_PORT"]
+db_name = st.secrets["MYSQL_DATABASE"]
 # Access API credentials
 # API_BASE_URL = os.getenv("API_BASE_URL", "http://192.168.10.82/hxa/ai_api/index.php")
 # API_KEY = os.getenv("API_KEY")
