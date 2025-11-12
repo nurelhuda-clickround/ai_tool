@@ -121,48 +121,50 @@ def chunk_text(text, chunk_size=300, overlap=50):
         start += chunk_size - overlap
     return chunks
 
-def build_index(data_folder: str = "data"):
+def build_index(data_folder="data"):
     docs, metadata = [], []
 
-    # ---------- 1. read files ----------
+    # === 1. Read all files ===
     for file in os.listdir(data_folder):
-        fp = os.path.join(data_folder, file)
+        file_path = os.path.join(data_folder, file)
 
         if file.lower().endswith(".pdf"):
-            text = extract_text_from_pdf(fp)
+            text = extract_text_from_pdf(file_path)
             chunks = chunk_text(text, chunk_size=150, overlap=10)
-            for c in chunks:
-                if c.strip():
-                    docs.append(c.strip())
+            for chunk in chunks:
+                if chunk.strip():
+                    docs.append(chunk.strip())
                     metadata.append({"source": file, "type": "pdf", "structured": None})
 
         elif file.lower().endswith((".xlsx", ".xls")):
-            structured_rows, text_data = extract_structured_from_excel(fp)
+            structured_rows, text_data = extract_structured_from_excel(file_path)
             chunks = chunk_text(text_data, chunk_size=150, overlap=10)
-            for i, c in enumerate(chunks):
-                docs.append(c.strip())
-                metadata.append(
-                    {"source": file, "type": "excel", "structured": structured_rows}
-                )
+            for i, chunk in enumerate(chunks):
+                docs.append(chunk.strip())
+                metadata.append({
+                    "source": file,
+                    "type": "excel",
+                    "structured": structured_rows
+                })
 
         elif file.lower().endswith((".txt", ".md")):
-            with open(fp, "r", encoding="utf-8") as f:
+            with open(file_path, "r", encoding="utf-8") as f:
                 text = f.read()
             chunks = chunk_text(text, chunk_size=150, overlap=10)
-            for c in chunks:
-                if c.strip():
-                    docs.append(c.strip())
+            for chunk in chunks:
+                if chunk.strip():
+                    docs.append(chunk.strip())
                     metadata.append({"source": file, "type": "text", "structured": None})
 
-    # ---------- 2. embed ----------
+    # === 2. If no docs, return empty index ===
     if not docs:
-        # empty index – FAISS still needs a dimension
         dim = 384
         index = faiss.IndexFlatIP(dim)
         return docs, metadata, index
 
-    embedder = get_cpu_huggingface_embeddings()               # <-- safe
-    embeddings = embedder.embed_documents(docs)               # <-- list → np.array
+    # === 3. Use ONLY HuggingFaceEmbeddings (SAFE on CPU) ===
+    embedder = get_cpu_huggingface_embeddings()  # <-- This is 100% safe
+    embeddings = embedder.embed_documents(docs)  # <-- Correct method
     embeddings = np.array(embeddings, dtype=np.float32)
 
     dim = embeddings.shape[1]
