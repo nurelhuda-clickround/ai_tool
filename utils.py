@@ -38,20 +38,20 @@ import torch
 load_dotenv()
 
 # Access MySQL credentials
-# MYSQL_HOST = os.getenv("MYSQL_HOST")
-# MYSQL_USER = os.getenv("MYSQL_USER")
-# MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD")
-# MYSQL_DATABASE = os.getenv("MYSQL_DATABASE")
-# MYSQL_PORT = os.getenv("MYSQL_PORT", "3306")
+MYSQL_HOST = os.getenv("MYSQL_HOST")
+MYSQL_USER = os.getenv("MYSQL_USER")
+MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD")
+MYSQL_DATABASE = os.getenv("MYSQL_DATABASE")
+MYSQL_PORT = os.getenv("MYSQL_PORT", "3306")
 
 # Access API credentials
 # API_BASE_URL = os.getenv("API_BASE_URL", "http://192.168.10.82/hxa/ai_api/index.php")
 # API_KEY = os.getenv("API_KEY")
-db_user = st.secrets["mysql"]["MYSQL_USER"] 
-db_password = st.secrets["mysql"]["MYSQL_PASSWORD"] 
-db_host = st.secrets["mysql"]["MYSQL_HOST"] 
-db_port = st.secrets["mysql"]["MYSQL_PORT"] 
-db_name = st.secrets["mysql"]["MYSQL_DATABASE"]
+# db_user = st.secrets["mysql"]["MYSQL_USER"] 
+# db_password = st.secrets["mysql"]["MYSQL_PASSWORD"] 
+# db_host = st.secrets["mysql"]["MYSQL_HOST"] 
+# db_port = st.secrets["mysql"]["MYSQL_PORT"] 
+# db_name = st.secrets["mysql"]["MYSQL_DATABASE"]
 # Access OpenAI API key
 # api_key = os.getenv("OPENAI_API_KEY")
 # os.environ["OPENAI_API_KEY"] = api_key
@@ -64,23 +64,30 @@ llm = ChatOpenAI(model="gpt-4.1-nano", temperature=0)
 # -------------------------------
 # SentenceTransformer helpers
 # -------------------------------
-def get_cpu_sentence_transformer(model_name="all-MiniLM-L6-v2"):
-    """
-    Load SentenceTransformer safely on CPU to avoid 'meta tensor' errors.
-    """
-    device = torch.device("cpu")
-    model = SentenceTransformer(model_name, device=device)
-    return model
+def get_cpu_huggingface_embeddings(
+    model_name: str = "sentence-transformers/all-MiniLM-L6-v2",
+):
+    """LangChain wrapper – always safe on CPU."""
+    from langchain.embeddings import HuggingFaceEmbeddings
 
-def get_cpu_huggingface_embeddings(model_name="sentence-transformers/all-MiniLM-L6-v2"):
-    """
-    Returns a HuggingFaceEmbeddings wrapper safely using CPU.
-    """
     return HuggingFaceEmbeddings(
         model_name=model_name,
         model_kwargs={"device": "cpu"},
-        encode_kwargs={"normalize_embeddings": True}
+        encode_kwargs={"normalize_embeddings": True},
     )
+
+
+def get_cpu_sentence_transformer(model_name: str = "all-MiniLM-L6-v2"):
+    """SentenceTransformer – never calls .to() on a meta tensor."""
+    from sentence_transformers import SentenceTransformer
+    import torch
+
+    model = SentenceTransformer(model_name)               # load without device
+    if any(p.device.type == "meta" for p in model.parameters()):
+        model = SentenceTransformer(model_name, device="cpu")
+    else:
+        model = model.to(torch.device("cpu"))
+    return model
 
 def extract_text_from_pdf(pdf_path):
     text = ""
@@ -114,46 +121,55 @@ def chunk_text(text, chunk_size=300, overlap=50):
         start += chunk_size - overlap
     return chunks
 
-def build_index(data_folder="data"):
+def build_index(data_folder: str = "data"):
     docs, metadata = [], []
+
+    # ---------- 1. read files ----------
     for file in os.listdir(data_folder):
-        file_path = os.path.join(data_folder, file)
-        if file.endswith(".pdf"):
-            text = extract_text_from_pdf(file_path)
+        fp = os.path.join(data_folder, file)
+
+        if file.lower().endswith(".pdf"):
+            text = extract_text_from_pdf(fp)
             chunks = chunk_text(text, chunk_size=150, overlap=10)
-            for chunk in chunks:
-                if chunk.strip():
-                    docs.append(chunk.strip())
+            for c in chunks:
+                if c.strip():
+                    docs.append(c.strip())
                     metadata.append({"source": file, "type": "pdf", "structured": None})
-        elif file.endswith(".xlsx") or file.endswith(".xls"):
-            structured_rows, text_data = extract_structured_from_excel(file_path)
+
+        elif file.lower().endswith((".xlsx", ".xls")):
+            structured_rows, text_data = extract_structured_from_excel(fp)
             chunks = chunk_text(text_data, chunk_size=150, overlap=10)
-            for i, chunk in enumerate(chunks):
-                docs.append(chunk.strip())
-                metadata.append({
-                    "source": file,
-                    "type": "excel",
-                    "structured": structured_rows
-                })
-        elif file.endswith(".txt") or file.endswith(".md"):
-            with open(file_path, "r", encoding="utf-8") as f:
+            for i, c in enumerate(chunks):
+                docs.append(c.strip())
+                metadata.append(
+                    {"source": file, "type": "excel", "structured": structured_rows}
+                )
+
+        elif file.lower().endswith((".txt", ".md")):
+            with open(fp, "r", encoding="utf-8") as f:
                 text = f.read()
             chunks = chunk_text(text, chunk_size=150, overlap=10)
-            for chunk in chunks:
-                if chunk.strip():
-                    docs.append(chunk.strip())
+            for c in chunks:
+                if c.strip():
+                    docs.append(c.strip())
                     metadata.append({"source": file, "type": "text", "structured": None})
-    if docs:
-        embedder = get_cpu_sentence_transformer()
-        embeddings = embedder.encode(docs, normalize_embeddings=True)
-        dim = embeddings.shape[1]
-        index = faiss.IndexFlatIP(dim)
-        index.add(np.array(embeddings, dtype=np.float32))
-    else:
-        embeddings = np.array([]).reshape(0, 384)
+
+    # ---------- 2. embed ----------
+    if not docs:
+        # empty index – FAISS still needs a dimension
         dim = 384
         index = faiss.IndexFlatIP(dim)
-    return docs, metadata
+        return docs, metadata, index
+
+    embedder = get_cpu_huggingface_embeddings()               # <-- safe
+    embeddings = embedder.embed_documents(docs)               # <-- list → np.array
+    embeddings = np.array(embeddings, dtype=np.float32)
+
+    dim = embeddings.shape[1]
+    index = faiss.IndexFlatIP(dim)
+    index.add(embeddings)
+
+    return docs, metadata, index
 
 def get_api_tool(memory=None):
     """

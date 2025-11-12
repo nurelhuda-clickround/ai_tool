@@ -390,7 +390,7 @@ if "agent" not in st.session_state:
                 file_path = os.path.join("data", f)
                 if f.endswith((".xlsx", ".xls")):
                     load_excel_to_db(file_path)
-            docs, meta = build_index("data")
+            docs, meta, faiss_index = build_index("data")
             st.session_state.agent = get_multi_agent(None, docs, meta, conversation_history=all_history)
     else:
         st.info("📂 No documents uploaded yet. You can still ask general questions.")
@@ -640,6 +640,6 @@ if uploaded_files:
         st.success("✅ Files uploaded and data loaded successfully! Re-indexing...")
 
         with st.spinner("🔄 Re-indexing with uploaded documents..."):
-            docs, meta = build_index("data")
+            docs, meta, faiss_index = build_index("data")
             st.session_state.agent = get_multi_agent(None, docs, meta,conversation_history=all_history)
 
