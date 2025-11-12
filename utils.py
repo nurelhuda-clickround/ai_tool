@@ -38,15 +38,15 @@ import torch
 load_dotenv()
 
 # Access MySQL credentials
-MYSQL_HOST = os.getenv("MYSQL_HOST")
-MYSQL_USER = os.getenv("MYSQL_USER")
-MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD")
-MYSQL_DATABASE = os.getenv("MYSQL_DATABASE")
-MYSQL_PORT = os.getenv("MYSQL_PORT", "3306")
+# MYSQL_HOST = os.getenv("MYSQL_HOST")
+# MYSQL_USER = os.getenv("MYSQL_USER")
+# MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD")
+# MYSQL_DATABASE = os.getenv("MYSQL_DATABASE")
+# MYSQL_PORT = os.getenv("MYSQL_PORT", "3306")
 
 # Access API credentials
-API_BASE_URL = os.getenv("API_BASE_URL", "http://192.168.10.82/hxa/ai_api/index.php")
-API_KEY = os.getenv("API_KEY")
+# API_BASE_URL = os.getenv("API_BASE_URL", "http://192.168.10.82/hxa/ai_api/index.php")
+# API_KEY = os.getenv("API_KEY")
 
 # Access OpenAI API key
 # api_key = os.getenv("OPENAI_API_KEY")
