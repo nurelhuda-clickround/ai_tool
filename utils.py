@@ -43,7 +43,11 @@ load_dotenv()
 # MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD")
 # MYSQL_DATABASE = os.getenv("MYSQL_DATABASE")
 # MYSQL_PORT = os.getenv("MYSQL_PORT", "3306")
-
+db_user = st.secrets["mysql"]["user"]
+db_password = st.secrets["mysql"]["password"]
+db_host = st.secrets["mysql"]["host"]
+db_port = st.secrets["mysql"]["port"]
+db_name = st.secrets["mysql"]["database"]
 # Access API credentials
 # API_BASE_URL = os.getenv("API_BASE_URL", "http://192.168.10.82/hxa/ai_api/index.php")
 # API_KEY = os.getenv("API_KEY")
@@ -233,7 +237,7 @@ def generate_table_info(engine):
 
 def get_mysql_tool(memory=None, db_uri=None):
     if db_uri is None:
-        db_uri = f"mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DATABASE}"
+        db_uri = f"mysql+pymysql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
 
     table_info = {
         "tbl_purchase_order": """
