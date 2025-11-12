@@ -49,8 +49,8 @@ API_BASE_URL = os.getenv("API_BASE_URL", "http://192.168.10.82/hxa/ai_api/index.
 # API_KEY = os.getenv("API_KEY")
 
 # # Access OpenAI API key
-# api_key = os.getenv("OPENAI_API_KEY")
-# os.environ["OPENAI_API_KEY"] = api_key
+api_key = os.getenv("OPENAI_API_KEY")
+os.environ["OPENAI_API_KEY"] = api_key
 
 # Initialize SentenceTransformer
 embedder = SentenceTransformer('all-MiniLM-L6-v2', device='cpu')
