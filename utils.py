@@ -57,10 +57,30 @@ db_name = st.secrets["mysql"]["MYSQL_DATABASE"]
 # os.environ["OPENAI_API_KEY"] = api_key
 
 # Initialize SentenceTransformer
-embedder = SentenceTransformer('all-MiniLM-L6-v2', device='cpu')
+# embedder = SentenceTransformer('all-MiniLM-L6-v2', device='cpu')
 
 llm = ChatOpenAI(model="gpt-4.1-nano", temperature=0)
 
+# -------------------------------
+# SentenceTransformer helpers
+# -------------------------------
+def get_cpu_sentence_transformer(model_name="all-MiniLM-L6-v2"):
+    """
+    Load SentenceTransformer safely on CPU to avoid 'meta tensor' errors.
+    """
+    device = torch.device("cpu")
+    model = SentenceTransformer(model_name, device=device)
+    return model
+
+def get_cpu_huggingface_embeddings(model_name="sentence-transformers/all-MiniLM-L6-v2"):
+    """
+    Returns a HuggingFaceEmbeddings wrapper safely using CPU.
+    """
+    return HuggingFaceEmbeddings(
+        model_name=model_name,
+        model_kwargs={"device": "cpu"},
+        encode_kwargs={"normalize_embeddings": True}
+    )
 
 def extract_text_from_pdf(pdf_path):
     text = ""
@@ -124,6 +144,7 @@ def build_index(data_folder="data"):
                     docs.append(chunk.strip())
                     metadata.append({"source": file, "type": "text", "structured": None})
     if docs:
+        embedder = get_cpu_sentence_transformer()
         embeddings = embedder.encode(docs, normalize_embeddings=True)
         dim = embeddings.shape[1]
         index = faiss.IndexFlatIP(dim)
