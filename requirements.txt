@@ -116,9 +116,9 @@ tokenizers==0.15.2
 toml==0.10.2
 # ----- PyTorch (CPU) -----
 --extra-index-url https://download.pytorch.org/whl/cpu
-torch==2.1.2+cpu
-torchvision==0.16.2+cpu
-torchaudio==2.1.2+cpu
+torch==2.5.1
+torchvision==0.20.1
+torchaudio==2.5.1
 
 tornado==6.5.1
 tqdm==4.67.1
