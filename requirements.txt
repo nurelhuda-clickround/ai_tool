@@ -114,8 +114,7 @@ threadpoolctl==3.6.0
 tiktoken==0.10.0
 tokenizers==0.15.2
 toml==0.10.2
-# ----- PyTorch (CPU) -----
---extra-index-url https://download.pytorch.org/whl/cpu
+# ----- PyTorch -----
 torch==2.5.1
 torchvision==0.20.1
 torchaudio==2.5.1
