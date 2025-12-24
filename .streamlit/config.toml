@@ -1,5 +1,4 @@
 [client]
 showSidebarNavigation = false
 [server]
-baseUrlPath = "login"
 enableXsrfProtection = false
