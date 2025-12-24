@@ -38,6 +38,18 @@ import torch
 
 st.write("DEBUG OPENAI_API_KEY:", bool(os.getenv("OPENAI_API_KEY")))
 
+def get_llm():
+    api_key = os.getenv("OPENAI_API_KEY")
+
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY is not set at runtime")
+
+    return ChatOpenAI(
+        model="gpt-4.1-nano",
+        temperature=0,
+        api_key=api_key,
+    )
+
 if not os.getenv("OPENAI_API_KEY"):
     st.error("OPENAI_API_KEY is missing at runtime.")
     st.stop()
@@ -253,7 +265,7 @@ def get_sqlite_tool(memory=None):
     db = SQLDatabase.from_uri("sqlite:///structured_data.db")
     system_message = SystemMessage(content=SYSTEM_PROMPT)
     sql_agent_executor = create_sql_agent(
-        llm=llm,
+        llm=get_llm(),
         db=db,
         agent_type=AgentType.OPENAI_FUNCTIONS,
         memory=memory,
@@ -310,7 +322,7 @@ def get_mysql_tool(memory=None, db_uri=None):
     db = SQLDatabase.from_uri(db_uri, include_tables=existing_tables, sample_rows_in_table_info=3, custom_table_info=table_info)
     system_message = SystemMessage(content=SYSTEM_PROMPT)
     sql_agent_executor = create_sql_agent(
-        llm=llm,
+        llm=get_llm(),
         db=db,
         agent_type=AgentType.OPENAI_FUNCTIONS,
         memory=memory,
@@ -362,7 +374,7 @@ def get_retriever_tool(docs, metadata, memory=None):
         retriever = vectorstore.as_retriever()
 
         qa_chain = RetrievalQA.from_chain_type(
-            llm=llm,
+            llm=get_llm(),
             retriever=retriever,
             memory=memory,
             return_source_documents=False
@@ -400,7 +412,7 @@ def get_multi_agent(_, docs, metadata, db_uri=None, memory=None, conversation_hi
 
     return initialize_agent(
         tools=tools,
-        llm=llm,
+        llm=get_llm(),
         agent=AgentType.OPENAI_FUNCTIONS,
         memory=memory,
         verbose=True,
