@@ -34,6 +34,13 @@ from chat_history import load_all_conversations
 from prompt import SYSTEM_PROMPT
 import torch
 
+
+
+st.write("DEBUG OPENAI_API_KEY:", bool(os.getenv("OPENAI_API_KEY")))
+
+if not os.getenv("OPENAI_API_KEY"):
+    st.error("OPENAI_API_KEY is missing at runtime.")
+    st.stop()
 # Load environment variables from .env file
 # load_dotenv()
 
