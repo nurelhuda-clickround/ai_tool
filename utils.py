@@ -38,6 +38,12 @@ import torch
 
 st.write("DEBUG OPENAI_API_KEY:", bool(os.getenv("OPENAI_API_KEY")))
 
+secret_path = "/etc/secrets/OPENAI_API_KEY"
+if os.path.exists(secret_path):
+    with open(secret_path) as f:
+        os.environ["OPENAI_API_KEY"] = f.read().strip()
+
+
 if not os.getenv("OPENAI_API_KEY"):
     st.error("OPENAI_API_KEY is missing at runtime.")
     st.stop()
