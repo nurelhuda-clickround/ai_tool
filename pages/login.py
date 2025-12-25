@@ -41,8 +41,8 @@ if not cookies.ready():
 # -------------------------
 # Redirect if already logged in
 # -------------------------
-# if st.session_state.get("authenticated", False):
-#     st.switch_page("app.py")
+if st.session_state.get("authenticated", False):
+    st.switch_page("app.py")
 
 # -------------------------
 # API Key Generation 

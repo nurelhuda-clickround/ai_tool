@@ -116,10 +116,10 @@ if not st.session_state.get("authenticated"):
     try:
         session_id = cookies.get("session_id")
         # print(f"session_id: {session_id}")
-        if not session_id:
-            session_id = str(uuid.uuid4())
-            cookies["session_id"] = session_id
-            cookies.save()
+        # if not session_id:
+        #     session_id = str(uuid.uuid4())
+        #     cookies["session_id"] = session_id
+        #     cookies.save()
         st.session_state["session_id"] = session_id
         session_data = load_session(session_id)
         # print(f"session_id: {session_id}")
