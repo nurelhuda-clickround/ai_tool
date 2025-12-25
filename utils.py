@@ -394,15 +394,24 @@ def get_multi_agent(_, docs, metadata, db_uri=None, memory=None, conversation_hi
             elif msg["role"] == "assistant":
                 memory.chat_memory.add_ai_message(msg["content"])
 
-    if db_uri is None:
-        db_uri = f"mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DATABASE}"
-
     tools = [
-        get_mysql_tool(memory, db_uri),
         get_sqlite_tool(memory),
         get_retriever_tool(docs, metadata, memory),
-        # get_api_tool(memory)
     ]
+
+    # Attempt MySQL tool – skip if unreachable
+    MYSQL_HOST = os.getenv("MYSQL_HOST")
+    if MYSQL_HOST:
+        try:
+            if db_uri is None:
+                db_uri = f"mysql+pymysql://{os.getenv('MYSQL_USER')}:{os.getenv('MYSQL_PASSWORD')}@{MYSQL_HOST}:{os.getenv('MYSQL_PORT', '3306')}/{os.getenv('MYSQL_DATABASE')}"
+            engine = create_engine(db_uri, connect_args={"connect_timeout": 8})
+            inspect(engine)  # Quick connection test
+            tools.insert(0, get_mysql_tool(memory, db_uri))  # Add at front if successful
+            st.success("✅ Connected to ERP MySQL database")
+        except Exception as e:
+            st.warning("⚠️ ERP MySQL database unreachable – using document search & local tools only")
+            # Optional: st.info("Contact admin if ERP data access is needed.") 
 
     return initialize_agent(
         tools=tools,
