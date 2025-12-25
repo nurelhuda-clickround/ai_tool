@@ -131,11 +131,15 @@ if not st.session_state.get("authenticated"):
         st.error(f"Error restoring session: {e}")
 
 if not st.session_state.get("authenticated", False):
-    try:
-        st.switch_page("pages/login.py")  # redirect to login
-    except Exception:
-        st.warning("🔐 Please log in to continue.")
-        st.stop()
+    st.switch_page("pages/login.py")
+    st.stop()
+
+# if not st.session_state.get("authenticated", False):
+#     try:
+#         st.switch_page("pages/login.py")  # redirect to login
+#     except Exception:
+#         st.warning("🔐 Please log in to continue.")
+#         st.stop()
 
 # -------------------------
 # Header with Login/Logout
@@ -160,7 +164,10 @@ with col2:
                     del st.session_state["history"]  # clear guest chat if any
                 st.session_state["session_id"] = str(uuid.uuid4())
                 initialize_session_state()
-                st.switch_page("pages/login.py")
+                st.session_state.clear()
+                cookies["session_id"] = ""
+                cookies.save()
+                st.rerun()
             except Exception as e:
                 st.error(f"Error during logout: {e}")
     else:

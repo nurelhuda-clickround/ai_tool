@@ -41,8 +41,8 @@ if not cookies.ready():
 # -------------------------
 # Redirect if already logged in
 # -------------------------
-if st.session_state.get("authenticated", False):
-    st.switch_page("app.py")
+# if st.session_state.get("authenticated", False):
+#     st.switch_page("app.py")
 
 # -------------------------
 # API Key Generation 
@@ -113,11 +113,13 @@ def login():
                 if "session_id" not in st.session_state:
                     st.session_state["session_id"] = str(uuid.uuid4())
 
-                # Save session in DB or wherever
                 save_session(st.session_state["session_id"], username)
 
-                st.success("✅ Login successful! Redirecting...")
-                st.switch_page("app.py")
+                cookies["session_id"] = st.session_state["session_id"]
+                cookies.save()
+
+                st.success("✅ Login successful!")
+                st.rerun()
 
             else:
                 error_message = result.get("error_info") or result.get("message") or "Unknown error occurred."
