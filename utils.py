@@ -33,10 +33,8 @@ from langchain.memory import ConversationBufferMemory
 from chat_history import load_all_conversations
 from prompt import SYSTEM_PROMPT
 import torch
+import socket
 
-
-
-st.write("DEBUG OPENAI_API_KEY:", bool(os.getenv("OPENAI_API_KEY")))
 
 secret_path = "/etc/secrets/OPENAI_API_KEY"
 if os.path.exists(secret_path):
@@ -57,6 +55,30 @@ MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD")
 MYSQL_DATABASE = os.getenv("MYSQL_DATABASE")
 MYSQL_PORT = os.getenv("MYSQL_PORT", "3306")
 
+
+
+st.write("MYSQL_HOST:", MYSQL_HOST)
+st.write("MYSQL_PORT:", MYSQL_PORT)
+
+try:
+    socket.gethostbyname(MYSQL_HOST)
+    st.success("DNS resolved OK")
+except Exception as e:
+    st.error(f"DNS resolution failed: {e}")
+
+try:
+    conn = pymysql.connect(
+        host=MYSQL_HOST,
+        user=MYSQL_USER,
+        password=MYSQL_PASSWORD,
+        database=MYSQL_DATABASE,
+        port=int(MYSQL_PORT),
+        connect_timeout=10
+    )
+    st.success("Raw PyMySQL connection successful")
+    conn.close()
+except Exception as e:
+    st.error(f"PyMySQL connection failed: {e}")
 # Access API credentials
 # API_BASE_URL = os.getenv("API_BASE_URL", "http://192.168.10.82/hxa/ai_api/index.php")
 # API_KEY = os.getenv("API_KEY")
