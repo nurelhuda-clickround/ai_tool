@@ -120,13 +120,14 @@ if not st.session_state.get("authenticated"):
         #     session_id = str(uuid.uuid4())
         #     cookies["session_id"] = session_id
         #     cookies.save()
-        st.session_state["session_id"] = session_id
-        session_data = load_session(session_id)
-        # print(f"session_id: {session_id}")
-        if session_data:
-            st.session_state["authenticated"] = True
-            st.session_state["user"] = session_data["username"]
-            st.session_state["session_id"] = session_data["session_id"]
+        if session_id:
+            st.session_state["session_id"] = session_id
+            session_data = load_session(session_id)
+            # print(f"session_id: {session_id}")
+            if session_data:
+                st.session_state["authenticated"] = True
+                st.session_state["user"] = session_data["username"]
+                st.session_state["session_id"] = session_data["session_id"]
     except Exception as e:
         st.error(f"Error restoring session: {e}")
 
