@@ -34,6 +34,7 @@ from chat_history import load_all_conversations
 from prompt import SYSTEM_PROMPT
 import torch
 import socket
+import pymysql
 
 
 secret_path = "/etc/secrets/OPENAI_API_KEY"
