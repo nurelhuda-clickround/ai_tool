@@ -428,7 +428,7 @@ def get_multi_agent(_, docs, metadata, db_uri=None, memory=None, conversation_hi
     ]
 
     # Attempt MySQL tool – skip if unreachable
-    MYSQL_HOST = os.getenv("MYSQL_HOST")
+    # MYSQL_HOST = os.getenv("MYSQL_HOST")
     if MYSQL_HOST:
         try:
             if db_uri is None:
