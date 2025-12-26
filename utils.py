@@ -50,12 +50,17 @@ if not os.getenv("OPENAI_API_KEY"):
 # load_dotenv()
 
 # Access MySQL credentials
-MYSQL_HOST = os.getenv("MYSQL_HOST")
-MYSQL_USER = os.getenv("MYSQL_USER")
-MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD")
-MYSQL_DATABASE = os.getenv("MYSQL_DATABASE")
-MYSQL_PORT = os.getenv("MYSQL_PORT", "3306")
+# MYSQL_HOST = os.getenv("MYSQL_HOST")
+# MYSQL_USER = os.getenv("MYSQL_USER")
+# MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD")
+# MYSQL_DATABASE = os.getenv("MYSQL_DATABASE")
+# MYSQL_PORT = os.getenv("MYSQL_PORT", "3306")
 
+MYSQL_HOST='qbizhub.sct-lb.net'
+MYSQL_USER='qbizhub_db_user'
+MYSQL_PASSWORD='qbizhub_db_pass'
+MYSQL_DATABASE='qbizhub_db'
+MYSQL_PORT=3306
 
 
 st.write("MYSQL_HOST:", MYSQL_HOST)
