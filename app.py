@@ -112,26 +112,20 @@ init_db()
 # -------------------------
 # Restore Login Session
 # -------------------------
-if not st.session_state.get("authenticated"):
-    try:
-        session_id = cookies.get("session_id")
-        # print(f"session_id: {session_id}")
-        # if not session_id:
-        #     session_id = str(uuid.uuid4())
-        #     cookies["session_id"] = session_id
-        #     cookies.save()
-        if session_id:
-            st.session_state["session_id"] = session_id
-            session_data = load_session(session_id)
-            # print(f"session_id: {session_id}")
-            if session_data:
-                st.session_state["authenticated"] = True
-                st.session_state["user"] = session_data["username"]
-                st.session_state["session_id"] = session_data["session_id"]
-    except Exception as e:
-        st.error(f"Error restoring session: {e}")
+if "authenticated" not in st.session_state:
+    st.session_state["authenticated"] = False
 
-if not st.session_state.get("authenticated", False):
+if not st.session_state["authenticated"]:
+    session_id = cookies.get("session_id")
+
+    if session_id:
+        session_data = load_session(session_id)
+        if session_data:
+            st.session_state["authenticated"] = True
+            st.session_state["user"] = session_data["username"]
+            st.session_state["session_id"] = session_id
+
+if not st.session_state["authenticated"]:
     st.switch_page("pages/login.py")
     st.stop()
 
