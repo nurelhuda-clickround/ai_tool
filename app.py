@@ -117,13 +117,11 @@ if "authenticated" not in st.session_state:
 
 if not st.session_state["authenticated"]:
     session_id = cookies.get("session_id")
-
     if session_id:
-        session_data = load_session(session_id)
-        if session_data:
+        session = load_session(session_id)
+        if session:
             st.session_state["authenticated"] = True
-            st.session_state["user"] = session_data["username"]
-            st.session_state["session_id"] = session_id
+            st.session_state["user"] = session["username"]
 
 if not st.session_state["authenticated"]:
     st.switch_page("pages/login.py")

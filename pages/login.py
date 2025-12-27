@@ -106,7 +106,7 @@ def login():
                     return
 
                 # Store session info
-                st.session_state["authenticated"] = True
+                
                 st.session_state["user"] = username
                 st.session_state["access_token"] = access_token
 
@@ -115,7 +115,7 @@ def login():
                 cookies["session_id"] = st.session_state["session_id"]
                 cookies.save()
 
-                st.session_state["__just_logged_in"] = True
+                st.session_state["authenticated"] = True
                 st.rerun()
 
             else:
