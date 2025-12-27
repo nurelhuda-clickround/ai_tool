@@ -438,6 +438,7 @@ def get_multi_agent(_, docs, metadata, db_uri=None, memory=None, conversation_hi
             tools.insert(0, get_mysql_tool(memory, db_uri))  # Add at front if successful
             st.success("✅ Connected to ERP MySQL database")
         except Exception as e:
+            print(f"MySQL connection failed: {e}");
             st.error(f"MySQL connection failed: {e}")
             st.warning("⚠️ ERP MySQL database unreachable – using document search & local tools only")
             # Optional: st.info("Contact admin if ERP data access is needed.") 
