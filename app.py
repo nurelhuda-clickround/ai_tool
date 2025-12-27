@@ -126,8 +126,13 @@ if not st.session_state["authenticated"]:
             st.session_state["session_id"] = session_id
 
 if not st.session_state["authenticated"]:
+    # allow one rerun cycle before redirecting
+    if not st.session_state.get("__auth_checked"):
+        st.session_state["__auth_checked"] = True
+        st.rerun()
+
     st.switch_page("pages/login.py")
-    st.stop()
+
 
 # if not st.session_state.get("authenticated", False):
 #     try:

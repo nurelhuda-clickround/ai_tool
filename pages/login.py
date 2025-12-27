@@ -114,11 +114,9 @@ def login():
                     st.session_state["session_id"] = str(uuid.uuid4())
                 cookies["session_id"] = st.session_state["session_id"]
                 cookies.save()
-                # Save session in DB or wherever
-                save_session(st.session_state["session_id"], username)
 
-                st.success("✅ Login successful! Redirecting...")
-                st.switch_page("app.py")
+                st.session_state["__just_logged_in"] = True
+                st.rerun()
 
             else:
                 error_message = result.get("error_info") or result.get("message") or "Unknown error occurred."
