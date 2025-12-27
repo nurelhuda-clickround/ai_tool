@@ -432,7 +432,10 @@ def get_multi_agent(_, docs, metadata, db_uri=None, memory=None, conversation_hi
     if MYSQL_HOST:
         try:
             if db_uri is None:
-                db_uri = f"mysql+pymysql://{os.getenv('MYSQL_USER')}:{os.getenv('MYSQL_PASSWORD')}@{MYSQL_HOST}:{os.getenv('MYSQL_PORT', '3306')}/{os.getenv('MYSQL_DATABASE')}"
+                db_uri = (
+                    f"mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}"
+                    f"@{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DATABASE}"
+                )
             engine = create_engine(db_uri, connect_args={"connect_timeout": 8})
             inspect(engine)  # Quick connection test
             tools.insert(0, get_mysql_tool(memory, db_uri))  # Add at front if successful
