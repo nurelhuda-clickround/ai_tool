@@ -112,7 +112,8 @@ def login():
 
                 if "session_id" not in st.session_state:
                     st.session_state["session_id"] = str(uuid.uuid4())
-
+                cookies["session_id"] = st.session_state["session_id"]
+                cookies.save()
                 # Save session in DB or wherever
                 save_session(st.session_state["session_id"], username)
 

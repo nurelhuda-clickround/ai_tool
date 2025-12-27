@@ -1,4 +1,4 @@
-# cookie_manager.py
+# cookie_utils.py
 import os
 import streamlit as st
 from streamlit_cookies_manager import EncryptedCookieManager
@@ -9,9 +9,12 @@ def get_cookie_manager():
         password=os.getenv(
             "COOKIE_PASSWORD",
             "x7$9kP!mQwZ2vN8rT5jYhL3pF9bXqW2zR4tY6u"
-        )
+        ),
+        secure=True,        # ✅ REQUIRED for Render / HTTPS
+        same_site="lax",    # ✅ allows navigation redirect
     )
+
     if not cookies.ready():
-        st.info("🔄 Syncing cookies...")
         st.stop()
+
     return cookies
