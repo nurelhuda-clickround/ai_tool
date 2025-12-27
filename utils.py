@@ -56,17 +56,17 @@ if not os.getenv("OPENAI_API_KEY"):
 # MYSQL_DATABASE = os.getenv("MYSQL_DATABASE")
 # MYSQL_PORT = os.getenv("MYSQL_PORT", "3306")
 
-# MYSQL_HOST='qbizhub.sct-lb.net'
-# MYSQL_USER='qbizhub_db_user'
-# MYSQL_PASSWORD='qbizhub_db_pass'
-# MYSQL_DATABASE='qbizhub_db'
-# MYSQL_PORT=3306
+MYSQL_HOST='qbizhub.sct-lb.net'
+MYSQL_USER='qbizhub_db_user'
+MYSQL_PASSWORD='qbizhub_db_pass'
+MYSQL_DATABASE='qbizhub_db'
+MYSQL_PORT=3306
 
-MYSQL_HOST = os.environ.get("MYSQL_HOST")
-MYSQL_PORT = int(os.environ.get("MYSQL_PORT", 3306))
-MYSQL_USER = os.environ.get("MYSQL_USER")
-MYSQL_PASSWORD = os.environ.get("MYSQL_PASSWORD")
-MYSQL_DATABASE = os.environ.get("MYSQL_DATABASE")
+# MYSQL_HOST = os.environ.get("MYSQL_HOST")
+# MYSQL_PORT = int(os.environ.get("MYSQL_PORT", 3306))
+# MYSQL_USER = os.environ.get("MYSQL_USER")
+# MYSQL_PASSWORD = os.environ.get("MYSQL_PASSWORD")
+# MYSQL_DATABASE = os.environ.get("MYSQL_DATABASE")
 
 # st.write({
 #     "MYSQL_HOST": MYSQL_HOST,
