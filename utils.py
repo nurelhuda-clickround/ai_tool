@@ -56,17 +56,17 @@ if not os.getenv("OPENAI_API_KEY"):
 # MYSQL_DATABASE = os.getenv("MYSQL_DATABASE")
 # MYSQL_PORT = os.getenv("MYSQL_PORT", "3306")
 
-# MYSQL_HOST='veggiesmart.sct-lb.net/'
-# MYSQL_USER='hxaveggies_user'
-# MYSQL_PASSWORD='hxaveggies_user_pass'
-# MYSQL_DATABASE='hxaveggies_db'
-# MYSQL_PORT=3306
+MYSQL_HOST='veggiesmart.sct-lb.net/'
+MYSQL_USER='hxaveggies_user'
+MYSQL_PASSWORD='hxaveggies_user_pass'
+MYSQL_DATABASE='hxaveggies_db'
+MYSQL_PORT=3306
 
-MYSQL_HOST = os.environ.get("MYSQL_HOST")
-MYSQL_PORT = int(os.environ.get("MYSQL_PORT", 3306))
-MYSQL_USER = os.environ.get("MYSQL_USER")
-MYSQL_PASSWORD = os.environ.get("MYSQL_PASSWORD")
-MYSQL_DATABASE = os.environ.get("MYSQL_DATABASE")
+# MYSQL_HOST = os.environ.get("MYSQL_HOST")
+# MYSQL_PORT = int(os.environ.get("MYSQL_PORT", 3306))
+# MYSQL_USER = os.environ.get("MYSQL_USER")
+# MYSQL_PASSWORD = os.environ.get("MYSQL_PASSWORD")
+# MYSQL_DATABASE = os.environ.get("MYSQL_DATABASE")
 
 # st.write({
 #     "MYSQL_HOST": MYSQL_HOST,
@@ -76,25 +76,25 @@ MYSQL_DATABASE = os.environ.get("MYSQL_DATABASE")
 #     "MYSQL_PASSWORD": "SET" if MYSQL_PASSWORD else None
 # })
 
-try:
-    socket.gethostbyname(MYSQL_HOST)
-    st.success("DNS resolved OK")
-except Exception as e:
-    st.error(f"DNS resolution failed: {e}")
+# try:
+#     socket.gethostbyname(MYSQL_HOST)
+#     st.success("DNS resolved OK")
+# except Exception as e:
+#     st.error(f"DNS resolution failed: {e}")
 
-try:
-    conn = pymysql.connect(
-        host=MYSQL_HOST,
-        user=MYSQL_USER,
-        password=MYSQL_PASSWORD,
-        database=MYSQL_DATABASE,
-        port=int(MYSQL_PORT),
-        connect_timeout=10
-    )
-    st.success("Raw PyMySQL connection successful")
-    conn.close()
-except Exception as e:
-    st.error(f"PyMySQL connection failed: {e}")
+# try:
+#     conn = pymysql.connect(
+#         host=MYSQL_HOST,
+#         user=MYSQL_USER,
+#         password=MYSQL_PASSWORD,
+#         database=MYSQL_DATABASE,
+#         port=int(MYSQL_PORT),
+#         connect_timeout=10
+#     )
+#     st.success("Raw PyMySQL connection successful")
+#     conn.close()
+# except Exception as e:
+#     st.error(f"PyMySQL connection failed: {e}")
 # Access API credentials
 # API_BASE_URL = os.getenv("API_BASE_URL", "http://192.168.10.82/hxa/ai_api/index.php")
 # API_KEY = os.getenv("API_KEY")
