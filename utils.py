@@ -333,36 +333,36 @@ def get_mysql_tool(memory=None, db_uri=None):
     if db_uri is None:
         db_uri = f"mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DATABASE}"
 
-    table_info = {
-        "tbl_purchase_order": """
-        ### tbl_purchase_order
-        - This table contains all order data.
-        - Sales Orders: is_sales = 1
-        - Purchase Orders: is_sales = 0 and is_quotation = 0
-        - Quotations: is_quotation = 1
-        """,
-        "tbl_invoice_products_details": """
-        ### tbl_invoice_products_details
-        - Contains invoice line items with Product_ID and Product_Quantity.
-        - Must join with tbl_stock_products to get Product_Name for Product_ID.
-        """,
-        "tbl_stock_products": """
-        ### tbl_stock_products
-        - Contains product information with Product_ID and Product_Name.
-        """
-    }
+    # table_info = {
+    #     "tbl_purchase_order": """
+    #     ### tbl_purchase_order
+    #     - This table contains all order data.
+    #     - Sales Orders: is_sales = 1
+    #     - Purchase Orders: is_sales = 0 and is_quotation = 0
+    #     - Quotations: is_quotation = 1
+    #     """,
+    #     "tbl_invoice_products_details": """
+    #     ### tbl_invoice_products_details
+    #     - Contains invoice line items with Product_ID and Product_Quantity.
+    #     - Must join with tbl_stock_products to get Product_Name for Product_ID.
+    #     """,
+    #     "tbl_stock_products": """
+    #     ### tbl_stock_products
+    #     - Contains product information with Product_ID and Product_Name.
+    #     """
+    # }
 
     engine = create_engine(db_uri)
     inspector = inspect(engine)
     existing_tables = inspector.get_table_names()
 
     st.write("Tables LangChain sees:", existing_tables)
-    st.write("custom_table_info keys:", list(table_info.keys()))
+    # st.write("custom_table_info keys:", list(table_info.keys()))
     db = SQLDatabase.from_uri(
         db_uri,
         include_tables=existing_tables,
         sample_rows_in_table_info=3
-    )    
+    )
     system_message = SystemMessage(content=SYSTEM_PROMPT)
     sql_agent_executor = create_sql_agent(
         llm=llm,
