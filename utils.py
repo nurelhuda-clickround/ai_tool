@@ -35,6 +35,8 @@ from prompt import SYSTEM_PROMPT
 import torch
 import socket
 import pymysql
+from typing import Dict
+import pathlib
 
 
 secret_path = "/etc/secrets/OPENAI_API_KEY"
@@ -116,6 +118,41 @@ MYSQL_PORT = st.secrets["mysql"]["MYSQL_PORT"]
 
 llm = ChatOpenAI(model="gpt-4.1-nano", temperature=0)
 
+# ---------- Index & embedding cache settings ----------
+INDEX_DIR = os.path.join("data", ".index")
+INDEX_FAISS_PATH = os.path.join(INDEX_DIR, "index.faiss")
+INDEX_DOCS_PATH = os.path.join(INDEX_DIR, "docs.json")
+INDEX_META_PATH = os.path.join(INDEX_DIR, "meta.json")
+INDEX_HASHES_PATH = os.path.join(INDEX_DIR, "file_hashes.json")
+
+# Singleton embedding wrapper (LangChain HuggingFaceEmbeddings)
+_EMBEDDING_WRAPPER = None
+
+def get_embedding_wrapper(model_name: str = 'sentence-transformers/all-MiniLM-L6-v2'):
+    global _EMBEDDING_WRAPPER
+    if _EMBEDDING_WRAPPER is None:
+        _EMBEDDING_WRAPPER = get_cpu_huggingface_embeddings(model_name)
+    return _EMBEDDING_WRAPPER
+
+def _compute_file_hashes(data_folder: str = "data") -> Dict[str, str]:
+    hashes = {}
+    for file in os.listdir(data_folder):
+        file_path = os.path.join(data_folder, file)
+        if os.path.isfile(file_path):
+            h = hashlib.sha1()
+            try:
+                with open(file_path, "rb") as fh:
+                    while True:
+                        chunk = fh.read(8192)
+                        if not chunk:
+                            break
+                        h.update(chunk)
+                hashes[file] = h.hexdigest()
+            except Exception:
+                continue
+    return hashes
+
+
 # -------------------------------
 # SentenceTransformer helpers
 # -------------------------------
@@ -179,7 +216,31 @@ def chunk_text(text, chunk_size=300, overlap=50):
 def build_index(data_folder="data"):
     docs, metadata = [], []
 
-    # === 1. Read all files ===
+    pathlib.Path(INDEX_DIR).mkdir(parents=True, exist_ok=True)
+
+    # Quick-check: if a saved index exists and files haven't changed, load it
+    try:
+        current_hashes = _compute_file_hashes(data_folder)
+        if os.path.exists(INDEX_FAISS_PATH) and os.path.exists(INDEX_DOCS_PATH) and os.path.exists(INDEX_META_PATH) and os.path.exists(INDEX_HASHES_PATH):
+            try:
+                with open(INDEX_HASHES_PATH, "r", encoding="utf-8") as fh:
+                    saved_hashes = json.load(fh)
+                if saved_hashes == current_hashes:
+                    # load persisted index & metadata
+                    with open(INDEX_DOCS_PATH, "r", encoding="utf-8") as fh:
+                        docs = json.load(fh)
+                    with open(INDEX_META_PATH, "r", encoding="utf-8") as fh:
+                        metadata = json.load(fh)
+                    index = faiss.read_index(INDEX_FAISS_PATH)
+                    return docs, metadata, index
+            except Exception:
+                # If any load step fails, fall back to rebuilding
+                pass
+    except Exception:
+        # ignore hashing errors and rebuild
+        pass
+
+    # === 1. Read all files and chunk ===
     for file in os.listdir(data_folder):
         file_path = os.path.join(data_folder, file)
 
@@ -203,8 +264,11 @@ def build_index(data_folder="data"):
                 })
 
         elif file.lower().endswith((".txt", ".md")):
-            with open(file_path, "r", encoding="utf-8") as f:
-                text = f.read()
+            try:
+                with open(file_path, "r", encoding="utf-8") as f:
+                    text = f.read()
+            except Exception:
+                continue
             chunks = chunk_text(text, chunk_size=150, overlap=10)
             for chunk in chunks:
                 if chunk.strip():
@@ -217,14 +281,27 @@ def build_index(data_folder="data"):
         index = faiss.IndexFlatIP(dim)
         return docs, metadata, index
 
-    # === 3. Use ONLY HuggingFaceEmbeddings (SAFE on CPU) ===
-    embedder = get_cpu_huggingface_embeddings()  # <-- This is 100% safe
-    embeddings = embedder.embed_documents(docs)  # <-- Correct method
+    # === 3. Use singleton HuggingFaceEmbeddings (SAFE on CPU) ===
+    embedder = get_embedding_wrapper()
+    embeddings = embedder.embed_documents(docs)
     embeddings = np.array(embeddings, dtype=np.float32)
 
     dim = embeddings.shape[1]
     index = faiss.IndexFlatIP(dim)
     index.add(embeddings)
+
+    # Persist index and metadata for fast reloads
+    try:
+        faiss.write_index(index, INDEX_FAISS_PATH)
+        with open(INDEX_DOCS_PATH, "w", encoding="utf-8") as fh:
+            json.dump(docs, fh)
+        with open(INDEX_META_PATH, "w", encoding="utf-8") as fh:
+            json.dump(metadata, fh)
+        with open(INDEX_HASHES_PATH, "w", encoding="utf-8") as fh:
+            json.dump(_compute_file_hashes(data_folder), fh)
+    except Exception:
+        # ignore persistence failures
+        pass
 
     return docs, metadata, index
 
@@ -395,52 +472,61 @@ def list_mysql_tables():
     print("Tables in DB:", inspector.get_table_names())
 
 def get_retriever_tool(docs, metadata, memory=None):
-    documents = [Document(page_content=doc, metadata=meta) for doc, meta in zip(docs, metadata)]
-    try:
-        print("Initializing HuggingFaceEmbeddings on CPU...")
-        # Initialize the SentenceTransformer model
-        embedding_model = SentenceTransformer(
-            'sentence-transformers/all-MiniLM-L6-v2',
-            device=None  # Let SentenceTransformer handle device placement initially
-        )
-        # Explicitly move the model to CPU using to_empty if needed
-        if torch.cuda.is_available():
-            # Move model to GPU if available
-            embedding_model = embedding_model.to('cuda')
-        else:
-            # CPU-only environment: handle 'meta' device or normal CPU move
-            if embedding_model.device.type == 'meta':
-                embedding_model = embedding_model.to_empty(device='cpu')  # Initialize on CPU
-            else:
-                embedding_model = embedding_model.to('cpu')  # Move to CPU
-        # Wrap the SentenceTransformer in HuggingFaceEmbeddings
-        embedding_wrapper = HuggingFaceEmbeddings(
-            model_name='sentence-transformers/all-MiniLM-L6-v2',
-            model_kwargs={'device': 'cpu'},
-            encode_kwargs={'normalize_embeddings': True}
-        )
-        print("Embeddings initialized successfully.")
-        
-        # Create the vector store
-        vectorstore = LangchainFAISS.from_documents(documents, embedding_wrapper)
-        retriever = vectorstore.as_retriever()
+    # Use a local retriever that reuses a persisted FAISS index when available
+    class LocalRetriever:
+        def __init__(self, index, docs, metadata, embedder, k=4):
+            self.index = index
+            self.docs = docs
+            self.metadata = metadata
+            self.embedder = embedder
+            self.k = k
 
-        qa_chain = RetrievalQA.from_chain_type(
-            llm=llm,
-            retriever=retriever,
-            memory=memory,
-            return_source_documents=False
-        )
+        def get_relevant_documents(self, query):
+            try:
+                q_emb = self.embedder.embed_query(query)
+            except Exception:
+                q_emb = self.embedder.embed_documents([query])[0]
 
-        return Tool(
-            name="document_retriever",
-            func=qa_chain.run,
-            description="Useful for answering questions from resumes, documents, or ERP policies."
-        )
+            q_emb = np.array(q_emb, dtype=np.float32)
+            if q_emb.ndim == 1:
+                q_emb = q_emb.reshape(1, -1)
 
-    except Exception as e:
-        st.error(f"Failed to initialize HuggingFaceEmbeddings: {e}")
-        raise
+            D, I = self.index.search(q_emb, self.k)
+            results = []
+            for idx in I[0]:
+                if idx < len(self.docs):
+                    results.append(Document(page_content=self.docs[idx], metadata=self.metadata[idx]))
+            return results
+
+    # Prefer a cached qa_chain in the Streamlit session to avoid re-init
+    if st.session_state.get("qa_chain"):
+        cached = st.session_state.get("qa_chain")
+        return Tool(name="document_retriever", func=cached.run, description="Cached document retriever")
+
+    # Build or load index (fast when persisted)
+    if not docs or not metadata:
+        docs, metadata, index = build_index()
+    else:
+        # If caller provided docs/metadata, try to reuse persisted index
+        _, _, index = build_index()
+
+    embedder = get_embedding_wrapper()
+    retriever = LocalRetriever(index=index, docs=docs, metadata=metadata, embedder=embedder)
+
+    qa_chain = RetrievalQA.from_chain_type(
+        llm=llm,
+        retriever=retriever,
+        memory=memory,
+        return_source_documents=False
+    )
+
+    st.session_state["qa_chain"] = qa_chain
+
+    return Tool(
+        name="document_retriever",
+        func=qa_chain.run,
+        description="Useful for answering questions from resumes, documents, or ERP policies. (cached)"
+    )
 def get_multi_agent(_, docs, metadata, db_uri=None, memory=None, conversation_history=None):
     if memory is None:
         memory = ConversationBufferMemory(return_messages=True, memory_key="chat_history")
