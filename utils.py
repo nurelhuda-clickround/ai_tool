@@ -340,6 +340,10 @@ def get_mysql_tool(memory=None, db_uri=None):
         - Purchase Orders: is_sales = 0 and is_quotation = 0
         - Quotations: is_quotation = 1
         """,
+        "tbl_invoices": """
+        ### tbl_invoices
+        - Contains invoice information.
+        """,
         "tbl_invoice_products_details": """
         ### tbl_invoice_products_details
         - Contains invoice line items with Product_ID and Product_Quantity.
@@ -348,7 +352,7 @@ def get_mysql_tool(memory=None, db_uri=None):
         "tbl_stock_products": """
         ### tbl_stock_products
         - Contains product information with Product_ID and Product_Name.
-        """
+        """,
     }
 
     engine = create_engine(db_uri)
