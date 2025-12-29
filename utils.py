@@ -10,7 +10,7 @@ from langchain_community.utilities import SQLDatabase
 from langchain_community.agent_toolkits.sql.base import create_sql_agent
 from langchain_openai import ChatOpenAI
 from langchain.chains import RetrievalQA
-from langchain.schema import Document, BaseRetriever
+from langchain.schema import Document
 from langchain.embeddings import HuggingFaceEmbeddings
 from langchain.vectorstores import FAISS as LangchainFAISS
 from docx import Document as DocxDocument
@@ -35,7 +35,7 @@ from prompt import SYSTEM_PROMPT
 import torch
 import socket
 import pymysql
-from typing import Dict, Any, List
+from typing import Dict
 import pathlib
 
 
@@ -494,12 +494,13 @@ def list_mysql_tables():
 
 def get_retriever_tool(docs, metadata, memory=None):
     # Use a local retriever that reuses a persisted FAISS index when available
-    class LocalRetriever(BaseRetriever):
-        index: Any
-        docs: List[str]
-        metadata: List[Dict]
-        embedder: Any
-        k: int = 4
+    class LocalRetriever:
+        def __init__(self, index, docs, metadata, embedder, k=4):
+            self.index = index
+            self.docs = docs
+            self.metadata = metadata
+            self.embedder = embedder
+            self.k = k
 
         def get_relevant_documents(self, query):
             try:
