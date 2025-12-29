@@ -1,16 +1,11 @@
 import os
-import PyPDF2
-import pandas as pd
-import faiss
 import numpy as np
-from sentence_transformers import SentenceTransformer
 from langchain.tools import Tool
 from langchain.agents import initialize_agent, AgentType
 from langchain_community.utilities import SQLDatabase
 from langchain_community.agent_toolkits.sql.base import create_sql_agent
-from langchain_openai import ChatOpenAI
 from langchain.chains import RetrievalQA
-from langchain.schema import Document
+from langchain.schema import Document, BaseRetriever
 from langchain.embeddings import HuggingFaceEmbeddings
 from langchain.vectorstores import FAISS as LangchainFAISS
 from docx import Document as DocxDocument
@@ -22,10 +17,7 @@ import json
 import re
 import time
 import hashlib
-import plotly.express as px
 import streamlit as st
-import fitz
-from sqlalchemy import create_engine, inspect
 from dotenv import load_dotenv
 import requests
 import uuid
@@ -34,9 +26,9 @@ from chat_history import load_all_conversations
 from prompt import SYSTEM_PROMPT
 import torch
 import socket
-import pymysql
-from typing import Dict
+from typing import Dict, Any, List
 import pathlib
+import threading
 
 
 secret_path = "/etc/secrets/OPENAI_API_KEY"
@@ -49,25 +41,25 @@ if not os.getenv("OPENAI_API_KEY"):
     st.error("OPENAI_API_KEY is missing at runtime.")
     st.stop()
 # Load environment variables from .env file
-# load_dotenv()
+load_dotenv()
 
 # Access MySQL credentials
-# MYSQL_HOST = os.getenv("MYSQL_HOST")
-# MYSQL_USER = os.getenv("MYSQL_USER")
-# MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD")
-# MYSQL_DATABASE = os.getenv("MYSQL_DATABASE")
-# MYSQL_PORT = os.getenv("MYSQL_PORT", "3306")
+MYSQL_HOST = os.getenv("MYSQL_HOST")
+MYSQL_USER = os.getenv("MYSQL_USER")
+MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD")
+MYSQL_DATABASE = os.getenv("MYSQL_DATABASE")
+MYSQL_PORT = os.getenv("MYSQL_PORT", "3306")
 
 # MYSQL_HOST='veggiesmart.sct-lb.net'
 # MYSQL_USER='hxaveggies_user'
 # MYSQL_PASSWORD='hxaveggies_user_pass'
 # MYSQL_DATABASE='hxaveggies_db'
 # MYSQL_PORT=3306
-MYSQL_HOST = st.secrets["mysql"]["MYSQL_HOST"]
-MYSQL_USER = st.secrets["mysql"]["MYSQL_USER"]
-MYSQL_PASSWORD = st.secrets["mysql"]["MYSQL_PASSWORD"]
-MYSQL_DATABASE = st.secrets["mysql"]["MYSQL_DATABASE"]
-MYSQL_PORT = st.secrets["mysql"]["MYSQL_PORT"]
+# MYSQL_HOST = st.secrets["mysql"]["MYSQL_HOST"]
+# MYSQL_USER = st.secrets["mysql"]["MYSQL_USER"]
+# MYSQL_PASSWORD = st.secrets["mysql"]["MYSQL_PASSWORD"]
+# MYSQL_DATABASE = st.secrets["mysql"]["MYSQL_DATABASE"]
+# MYSQL_PORT = st.secrets["mysql"]["MYSQL_PORT"]
 # MYSQL_HOST = os.environ.get("MYSQL_HOST")
 # MYSQL_PORT = int(os.environ.get("MYSQL_PORT", 3306))
 # MYSQL_USER = os.environ.get("MYSQL_USER")
@@ -116,7 +108,17 @@ MYSQL_PORT = st.secrets["mysql"]["MYSQL_PORT"]
 # Initialize SentenceTransformer
 # embedder = SentenceTransformer('all-MiniLM-L6-v2', device='cpu')
 
-llm = ChatOpenAI(model="gpt-4.1-nano", temperature=0)
+# heavy imports moved into functions to reduce cold-start time
+
+
+@st.cache_resource
+def get_llm(model: str = "gpt-4.1-nano", temperature: float = 0):
+    # lazy import ChatOpenAI to avoid heavy import cost at module load
+    from langchain_openai import ChatOpenAI
+    return ChatOpenAI(model=model, temperature=temperature)
+
+
+llm = get_llm()
 
 # ---------- Index & embedding cache settings ----------
 INDEX_DIR = os.path.join("data", ".index")
@@ -134,23 +136,52 @@ def get_embedding_wrapper(model_name: str = 'sentence-transformers/all-MiniLM-L6
         _EMBEDDING_WRAPPER = get_cpu_huggingface_embeddings(model_name)
     return _EMBEDDING_WRAPPER
 
-def _compute_file_hashes(data_folder: str = "data") -> Dict[str, str]:
-    hashes = {}
-    for file in os.listdir(data_folder):
-        file_path = os.path.join(data_folder, file)
-        if os.path.isfile(file_path):
-            h = hashlib.sha1()
-            try:
-                with open(file_path, "rb") as fh:
-                    while True:
-                        chunk = fh.read(8192)
-                        if not chunk:
-                            break
-                        h.update(chunk)
-                hashes[file] = h.hexdigest()
-            except Exception:
-                continue
-    return hashes
+def _compute_file_hashes(data_folder: str = "data") -> Dict[str, Dict[str, int]]:
+    """
+    Return a fast signature for files in `data_folder` keyed by filename -> {mtime, size}.
+    This avoids reading entire file contents and is much faster for large files.
+    """
+    sigs = {}
+    try:
+        for file in os.listdir(data_folder):
+            file_path = os.path.join(data_folder, file)
+            if os.path.isfile(file_path):
+                try:
+                    stt = os.stat(file_path)
+                    sigs[file] = {"mtime": int(stt.st_mtime), "size": stt.st_size}
+                except Exception:
+                    continue
+    except Exception:
+        pass
+    return sigs
+
+
+def _safe_name(filename: str) -> str:
+    return hashlib.sha1(filename.encode("utf-8")).hexdigest()
+
+
+def _per_file_paths(filename: str):
+    safe = _safe_name(filename)
+    base = os.path.join(INDEX_DIR, safe)
+    pathlib.Path(base).mkdir(parents=True, exist_ok=True)
+    return {
+        "dir": base,
+        "docs": os.path.join(base, "docs.json"),
+        "meta": os.path.join(base, "meta.json"),
+        "emb": os.path.join(base, "emb.npy"),
+        "hash": os.path.join(base, "hash.txt"),
+    }
+
+
+# Background-threaded indexing removed — rely on `@st.cache_resource` for cached index builds
+
+
+# Cached global index wrapper using file-hash as cache key
+@st.cache_resource
+def cached_build_index(file_sig: str, data_folder="data", chunk_size: int = 300, overlap: int = 20, batch_size: int = 64):
+    # file_sig should be a deterministic but cheap fingerprint (mtime+size) of files
+    return build_index(data_folder=data_folder, chunk_size=chunk_size, overlap=overlap, batch_size=batch_size)
+
 
 
 # -------------------------------
@@ -182,6 +213,8 @@ def get_cpu_sentence_transformer(model_name: str = "all-MiniLM-L6-v2"):
     return model
 
 def extract_text_from_pdf(pdf_path):
+    # import here to avoid heavy import at module load
+    import fitz
     text = ""
     with fitz.open(pdf_path) as doc:
         for page in doc:
@@ -191,6 +224,7 @@ def extract_text_from_pdf(pdf_path):
     return text
 
 def extract_structured_from_excel(excel_path):
+    import pandas as pd
     df = pd.read_excel(excel_path)
     df = df.fillna("")
     structured_rows = []
@@ -217,8 +251,10 @@ def build_index(data_folder="data", chunk_size: int = 300, overlap: int = 20, ba
     docs, metadata = [], []
 
     pathlib.Path(INDEX_DIR).mkdir(parents=True, exist_ok=True)
+    # lazy import faiss to avoid import cost at module load
+    import faiss
 
-    # Quick-check: if a saved index exists and files haven't changed, load it
+    # Quick-check: if a saved global index exists and files haven't changed, load it
     try:
         current_hashes = _compute_file_hashes(data_folder)
         if os.path.exists(INDEX_FAISS_PATH) and os.path.exists(INDEX_DOCS_PATH) and os.path.exists(INDEX_META_PATH) and os.path.exists(INDEX_HASHES_PATH):
@@ -240,91 +276,136 @@ def build_index(data_folder="data", chunk_size: int = 300, overlap: int = 20, ba
         # ignore hashing errors and rebuild
         pass
 
-    # === 1. Read all files and chunk ===
-    for file in os.listdir(data_folder):
+    # We'll build per-file embeddings (cached) and then combine
+    embedder = get_embedding_wrapper()
+    all_embs = []
+    doc_list = []
+    meta_list = []
+
+    files = [f for f in os.listdir(data_folder) if os.path.isfile(os.path.join(data_folder, f))]
+    total_files = len(files)
+    file_idx = 0
+
+    for file in files:
+        file_idx += 1
         file_path = os.path.join(data_folder, file)
+        paths = _per_file_paths(file)
 
-        if file.lower().endswith(".pdf"):
-            text = extract_text_from_pdf(file_path)
-            chunks = chunk_text(text, chunk_size=chunk_size, overlap=overlap)
-            for chunk in chunks:
-                if chunk.strip():
-                    docs.append(chunk.strip())
-                    metadata.append({"source": file, "type": "pdf", "structured": None})
+        # compute a cheap file signature (mtime:size) and compare with cached signature
+        try:
+            stt = os.stat(file_path)
+            file_sig = f"{int(stt.st_mtime)}:{stt.st_size}"
+        except Exception:
+            file_sig = None
 
-        elif file.lower().endswith((".xlsx", ".xls")):
-            structured_rows, text_data = extract_structured_from_excel(file_path)
-            chunks = chunk_text(text_data, chunk_size=chunk_size, overlap=overlap)
-            for i, chunk in enumerate(chunks):
-                docs.append(chunk.strip())
-                metadata.append({
-                    "source": file,
-                    "type": "excel",
-                    "structured": structured_rows
-                })
-
-        elif file.lower().endswith((".txt", ".md")):
+        use_cache = False
+        if file_sig and os.path.exists(paths["hash"]):
             try:
-                with open(file_path, "r", encoding="utf-8") as f:
-                    text = f.read()
+                with open(paths["hash"], "r", encoding="utf-8") as fh:
+                    saved = fh.read().strip()
+                if saved == file_sig and os.path.exists(paths["emb"]) and os.path.exists(paths["docs"]) and os.path.exists(paths["meta"]):
+                    use_cache = True
             except Exception:
-                continue
-            chunks = chunk_text(text, chunk_size=chunk_size, overlap=overlap)
-            for chunk in chunks:
-                if chunk.strip():
-                    docs.append(chunk.strip())
-                    metadata.append({"source": file, "type": "text", "structured": None})
+                use_cache = False
 
-    # === 2. If no docs, return empty index ===
-    if not docs:
+        if use_cache:
+            try:
+                file_docs = json.load(open(paths["docs"], "r", encoding="utf-8"))
+                file_meta = json.load(open(paths["meta"], "r", encoding="utf-8"))
+                file_emb = np.load(paths["emb"])
+            except Exception:
+                use_cache = False
+
+        if not use_cache:
+            # extract text and chunk depending on filetype
+            if file.lower().endswith(".pdf"):
+                text = extract_text_from_pdf(file_path)
+                chunks = chunk_text(text, chunk_size=chunk_size, overlap=overlap)
+                file_docs = [c.strip() for c in chunks if c.strip()]
+                file_meta = [{"source": file, "type": "pdf", "structured": None} for _ in file_docs]
+            elif file.lower().endswith((".xlsx", ".xls")):
+                structured_rows, text_data = extract_structured_from_excel(file_path)
+                chunks = chunk_text(text_data, chunk_size=chunk_size, overlap=overlap)
+                file_docs = [c.strip() for c in chunks if c.strip()]
+                file_meta = [{"source": file, "type": "excel", "structured": structured_rows} for _ in file_docs]
+            elif file.lower().endswith((".txt", ".md")):
+                try:
+                    with open(file_path, "r", encoding="utf-8") as f:
+                        text = f.read()
+                except Exception:
+                    continue
+                chunks = chunk_text(text, chunk_size=chunk_size, overlap=overlap)
+                file_docs = [c.strip() for c in chunks if c.strip()]
+                file_meta = [{"source": file, "type": "text", "structured": None} for _ in file_docs]
+            else:
+                # unsupported file types are skipped
+                continue
+
+            # compute embeddings for this file in batches
+            emb_list = []
+            for i in range(0, len(file_docs), batch_size):
+                batch = file_docs[i : i + batch_size]
+                try:
+                    batch_emb = embedder.embed_documents(batch)
+                except Exception:
+                    batch_emb = []
+                    for d in batch:
+                        batch_emb.append(embedder.embed_documents([d])[0])
+                emb_list.extend(batch_emb)
+
+            file_emb = np.array(emb_list, dtype=np.float32)
+
+            # persist per-file cache (store cheap file signature)
+            try:
+                np.save(paths["emb"], file_emb)
+                with open(paths["docs"], "w", encoding="utf-8") as fh:
+                    json.dump(file_docs, fh)
+                with open(paths["meta"], "w", encoding="utf-8") as fh:
+                    json.dump(file_meta, fh)
+                if file_sig:
+                    with open(paths["hash"], "w", encoding="utf-8") as fh:
+                        fh.write(file_sig)
+            except Exception:
+                pass
+
+        # append to global lists
+        if len(file_docs) > 0:
+            start_idx = len(doc_list)
+            doc_list.extend(file_docs)
+            meta_list.extend(file_meta)
+            all_embs.append(file_emb)
+
+        # update quick progress in session_state if present
+        try:
+            st.session_state["index_progress"] = file_idx / max(1, total_files)
+        except Exception:
+            pass
+
+    if not doc_list:
         dim = 384
         index = faiss.IndexFlatIP(dim)
-        return docs, metadata, index
+        return [], [], index
 
-    # === 3. Use singleton HuggingFaceEmbeddings (SAFE on CPU) ===
-    embedder = get_embedding_wrapper()
-
-    # Compute embeddings in batches to reduce peak memory and allow progress reporting
-    all_embeddings = []
-    total = len(docs)
-    if hasattr(st, "progress"):
-        progress_bar = st.progress(0)
-    else:
-        progress_bar = None
-
-    for i in range(0, total, batch_size):
-        batch = docs[i : i + batch_size]
-        try:
-            batch_emb = embedder.embed_documents(batch)
-        except Exception:
-            # Fallback: try smaller batch or single documents
-            batch_emb = []
-            for doc in batch:
-                batch_emb.append(embedder.embed_documents([doc])[0])
-        all_embeddings.extend(batch_emb)
-        if progress_bar is not None:
-            progress_bar.progress(min(1.0, (i + len(batch)) / max(1, total)))
-
-    embeddings = np.array(all_embeddings, dtype=np.float32)
+    # concatenate embeddings
+    embeddings = np.vstack(all_embs)
 
     dim = embeddings.shape[1]
     index = faiss.IndexFlatIP(dim)
     index.add(embeddings)
 
-    # Persist index and metadata for fast reloads
+    # Persist global index and metadata for fast reloads
     try:
         faiss.write_index(index, INDEX_FAISS_PATH)
         with open(INDEX_DOCS_PATH, "w", encoding="utf-8") as fh:
-            json.dump(docs, fh)
+            json.dump(doc_list, fh)
         with open(INDEX_META_PATH, "w", encoding="utf-8") as fh:
-            json.dump(metadata, fh)
+            json.dump(meta_list, fh)
         with open(INDEX_HASHES_PATH, "w", encoding="utf-8") as fh:
             json.dump(_compute_file_hashes(data_folder), fh)
     except Exception:
-        # ignore persistence failures
         pass
 
-    return docs, metadata, index
+    return doc_list, meta_list, index
 
 # def get_api_tool(memory=None):
 #     """
@@ -429,7 +510,7 @@ def generate_table_info(engine):
 def get_mysql_tool(memory=None, db_uri=None):
     if db_uri is None:
         db_uri = f"mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DATABASE}"
-
+    # The tool function is lazy: it will create DB engine and SQL agent only when invoked.
     table_info = {
         "tbl_purchase_order": """
         ### tbl_purchase_order
@@ -453,54 +534,64 @@ def get_mysql_tool(memory=None, db_uri=None):
         """,
     }
 
-    engine = create_engine(db_uri)
-    inspector = inspect(engine)
-    
-    # Get actual table names from DB
-    existing_tables = inspector.get_table_names()
+    def _call_mysql_tool(query: str) -> str:
+        try:
+            # lazy imports
+            from sqlalchemy import create_engine, inspect
+            from langchain_community.utilities import SQLDatabase
+            from langchain_community.agent_toolkits.sql.base import create_sql_agent
+            from langchain.schema import SystemMessage
 
-    # Only keep tables that exist in both the DB and your table_info
-    valid_tables = [t for t in table_info.keys() if t in existing_tables]
+            engine = create_engine(db_uri, connect_args={"connect_timeout": 5})
+            inspector = inspect(engine)
+            existing_tables = inspector.get_table_names()
 
-    db = SQLDatabase.from_uri(
-        db_uri,
-        include_tables=valid_tables,
-        sample_rows_in_table_info=3,
-        custom_table_info=table_info
-    )
+            # Only keep tables that exist in both the DB and your table_info
+            valid_tables = [t for t in table_info.keys() if t in existing_tables]
 
-    system_message = SystemMessage(content=SYSTEM_PROMPT)
-    sql_agent_executor = create_sql_agent(
-        llm=llm,
-        db=db,
-        agent_type=AgentType.OPENAI_FUNCTIONS,
-        memory=memory,
-        verbose=True,
-        agent_kwargs={"system_message": system_message}
-    )
+            db = SQLDatabase.from_uri(
+                db_uri,
+                include_tables=valid_tables,
+                sample_rows_in_table_info=3,
+                custom_table_info=table_info
+            )
+
+            system_message = SystemMessage(content=SYSTEM_PROMPT)
+            sql_agent_executor = create_sql_agent(
+                llm=llm,
+                db=db,
+                agent_type=AgentType.OPENAI_FUNCTIONS,
+                memory=memory,
+                verbose=True,
+                agent_kwargs={"system_message": system_message}
+            )
+
+            return sql_agent_executor.run(query)
+        except Exception as e:
+            return f"MySQL tool error: {e}"
 
     return Tool(
         name="mysql_tool",
-        func=sql_agent_executor.run,
-        description="Answer questions about structured financial data stored in MySQL (via phpMyAdmin). Use only when explicitly requested or when API tool fails."
+        func=_call_mysql_tool,
+        description="Answer questions about structured financial data stored in MySQL (via phpMyAdmin). Tool creates DB connection lazily when invoked."
     )
 
 
 def list_mysql_tables():
     db_uri = f"mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DATABASE}"
+    from sqlalchemy import create_engine, inspect
     engine = create_engine(db_uri)
     inspector = inspect(engine)
     print("Tables in DB:", inspector.get_table_names())
 
 def get_retriever_tool(docs, metadata, memory=None):
     # Use a local retriever that reuses a persisted FAISS index when available
-    class LocalRetriever:
-        def __init__(self, index, docs, metadata, embedder, k=4):
-            self.index = index
-            self.docs = docs
-            self.metadata = metadata
-            self.embedder = embedder
-            self.k = k
+    class LocalRetriever(BaseRetriever):
+        index: Any
+        docs: List[str]
+        metadata: List[Dict]
+        embedder: Any
+        k: int = 4
 
         def get_relevant_documents(self, query):
             try:
@@ -519,28 +610,35 @@ def get_retriever_tool(docs, metadata, memory=None):
                     results.append(Document(page_content=self.docs[idx], metadata=self.metadata[idx]))
             return results
 
-    # Prefer a cached qa_chain in the Streamlit session to avoid re-init
-    if st.session_state.get("qa_chain"):
-        cached = st.session_state.get("qa_chain")
+    # Build or load index (fast when persisted). Use cached global index when possible.
+    file_hashes = _compute_file_hashes("data")
+    file_sig = json.dumps(file_hashes, sort_keys=True)
+
+    docs_cached, meta_cached, index = cached_build_index(file_sig, data_folder="data")
+
+    # If a session memory is provided, do NOT cache QA chain (avoid caching with memory)
+    if memory is not None:
+        import faiss
+        embedding = get_embedding_wrapper()
+        retr = LocalRetriever(index=index, docs=docs_cached, metadata=meta_cached, embedder=embedding)
+        qa_chain = RetrievalQA.from_chain_type(llm=llm, retriever=retr, memory=memory, return_source_documents=False)
+        return Tool(name="document_retriever", func=qa_chain.run, description="Document retriever (non-cached, per-session memory)")
+
+    # memory is None -> safe to cache QA chain globally
+    cached = st.session_state.get("qa_chain")
+    if cached and getattr(cached, "_index_sig", None) == file_sig:
         return Tool(name="document_retriever", func=cached.run, description="Cached document retriever")
 
-    # Build or load index (fast when persisted)
-    if not docs or not metadata:
-        docs, metadata, index = build_index()
-    else:
-        # If caller provided docs/metadata, try to reuse persisted index
-        _, _, index = build_index()
+    @st.cache_resource
+    def _build_qa_chain(index_hash: str):
+        import faiss
+        embedding = get_embedding_wrapper()
+        retr = LocalRetriever(index=index, docs=docs_cached, metadata=meta_cached, embedder=embedding)
+        qa = RetrievalQA.from_chain_type(llm=llm, retriever=retr, memory=None, return_source_documents=False)
+        qa._index_sig = index_hash
+        return qa
 
-    embedder = get_embedding_wrapper()
-    retriever = LocalRetriever(index=index, docs=docs, metadata=metadata, embedder=embedder)
-
-    qa_chain = RetrievalQA.from_chain_type(
-        llm=llm,
-        retriever=retriever,
-        memory=memory,
-        return_source_documents=False
-    )
-
+    qa_chain = _build_qa_chain(file_sig)
     st.session_state["qa_chain"] = qa_chain
 
     return Tool(
@@ -564,24 +662,14 @@ def get_multi_agent(_, docs, metadata, db_uri=None, memory=None, conversation_hi
         get_retriever_tool(docs, metadata, memory),
     ]
 
-    # Attempt MySQL tool – skip if unreachable
-    # MYSQL_HOST = os.getenv("MYSQL_HOST")
+    # Add MySQL tool lazily if host configured (no upfront connection test)
     if MYSQL_HOST:
-        try:
-            if db_uri is None:
-                db_uri = (
-                    f"mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}"
-                    f"@{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DATABASE}"
-                )
-            engine = create_engine(db_uri, connect_args={"connect_timeout": 8})
-            inspect(engine)  # Quick connection test
-            tools.insert(0, get_mysql_tool(memory, db_uri))  # Add at front if successful
-            st.success("✅ Connected to ERP MySQL database")
-        except Exception as e:
-            print(f"MySQL connection failed: {e}");
-            st.error(f"MySQL connection failed: {e}")
-            st.warning("⚠️ ERP MySQL database unreachable – using document search & local tools only")
-            # Optional: st.info("Contact admin if ERP data access is needed.") 
+        if db_uri is None:
+            db_uri = (
+                f"mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}"
+                f"@{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DATABASE}"
+            )
+        tools.insert(0, get_mysql_tool(memory, db_uri))
 
     return initialize_agent(
         tools=tools,
@@ -677,6 +765,9 @@ def generate_chart(query: str, agent=None, retrieved_info: str = "") -> dict:
 
     if not chart_data or not chart_data.get("labels") or not chart_data.get("values"):
         return default_response
+
+    # lazy import plotly to avoid heavy import at module load
+    import plotly.express as px
 
     if selected_chart_type == "bar":
         fig = px.bar(x=chart_data["labels"], y=chart_data["values"], title=chart_data.get("title", "Chart"))
@@ -851,9 +942,12 @@ def cleanup_generated_files(directory="."):
 
 def load_excel_to_db(excel_path, db_uri="sqlite:///structured_data.db"):
     table_name = os.path.splitext(os.path.basename(excel_path))[0]
+    import pandas as pd
+    from sqlalchemy import create_engine
+
     df = pd.read_excel(excel_path)
     df = df.fillna("")
-    
+
     engine = create_engine(db_uri)
     df.to_sql(table_name, engine, if_exists='replace', index=False)
     
