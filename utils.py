@@ -10,7 +10,7 @@ from langchain_community.utilities import SQLDatabase
 from langchain_community.agent_toolkits.sql.base import create_sql_agent
 from langchain_openai import ChatOpenAI
 from langchain.chains import RetrievalQA
-from langchain.schema import Document
+from langchain.schema import Document, BaseRetriever
 from langchain.embeddings import HuggingFaceEmbeddings
 from langchain.vectorstores import FAISS as LangchainFAISS
 from docx import Document as DocxDocument
@@ -35,7 +35,7 @@ from prompt import SYSTEM_PROMPT
 import torch
 import socket
 import pymysql
-from typing import Dict
+from typing import Dict, Any, List
 import pathlib
 
 
@@ -49,25 +49,25 @@ if not os.getenv("OPENAI_API_KEY"):
     st.error("OPENAI_API_KEY is missing at runtime.")
     st.stop()
 # Load environment variables from .env file
-# load_dotenv()
+load_dotenv()
 
 # Access MySQL credentials
-# MYSQL_HOST = os.getenv("MYSQL_HOST")
-# MYSQL_USER = os.getenv("MYSQL_USER")
-# MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD")
-# MYSQL_DATABASE = os.getenv("MYSQL_DATABASE")
-# MYSQL_PORT = os.getenv("MYSQL_PORT", "3306")
+MYSQL_HOST = os.getenv("MYSQL_HOST")
+MYSQL_USER = os.getenv("MYSQL_USER")
+MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD")
+MYSQL_DATABASE = os.getenv("MYSQL_DATABASE")
+MYSQL_PORT = os.getenv("MYSQL_PORT", "3306")
 
 # MYSQL_HOST='veggiesmart.sct-lb.net'
 # MYSQL_USER='hxaveggies_user'
 # MYSQL_PASSWORD='hxaveggies_user_pass'
 # MYSQL_DATABASE='hxaveggies_db'
 # MYSQL_PORT=3306
-MYSQL_HOST = st.secrets["mysql"]["MYSQL_HOST"]
-MYSQL_USER = st.secrets["mysql"]["MYSQL_USER"]
-MYSQL_PASSWORD = st.secrets["mysql"]["MYSQL_PASSWORD"]
-MYSQL_DATABASE = st.secrets["mysql"]["MYSQL_DATABASE"]
-MYSQL_PORT = st.secrets["mysql"]["MYSQL_PORT"]
+# MYSQL_HOST = st.secrets["mysql"]["MYSQL_HOST"]
+# MYSQL_USER = st.secrets["mysql"]["MYSQL_USER"]
+# MYSQL_PASSWORD = st.secrets["mysql"]["MYSQL_PASSWORD"]
+# MYSQL_DATABASE = st.secrets["mysql"]["MYSQL_DATABASE"]
+# MYSQL_PORT = st.secrets["mysql"]["MYSQL_PORT"]
 # MYSQL_HOST = os.environ.get("MYSQL_HOST")
 # MYSQL_PORT = int(os.environ.get("MYSQL_PORT", 3306))
 # MYSQL_USER = os.environ.get("MYSQL_USER")
@@ -213,7 +213,7 @@ def chunk_text(text, chunk_size=300, overlap=50):
         start += chunk_size - overlap
     return chunks
 
-def build_index(data_folder="data"):
+def build_index(data_folder="data", chunk_size: int = 300, overlap: int = 20, batch_size: int = 64):
     docs, metadata = [], []
 
     pathlib.Path(INDEX_DIR).mkdir(parents=True, exist_ok=True)
@@ -246,7 +246,7 @@ def build_index(data_folder="data"):
 
         if file.lower().endswith(".pdf"):
             text = extract_text_from_pdf(file_path)
-            chunks = chunk_text(text, chunk_size=150, overlap=10)
+            chunks = chunk_text(text, chunk_size=chunk_size, overlap=overlap)
             for chunk in chunks:
                 if chunk.strip():
                     docs.append(chunk.strip())
@@ -254,7 +254,7 @@ def build_index(data_folder="data"):
 
         elif file.lower().endswith((".xlsx", ".xls")):
             structured_rows, text_data = extract_structured_from_excel(file_path)
-            chunks = chunk_text(text_data, chunk_size=150, overlap=10)
+            chunks = chunk_text(text_data, chunk_size=chunk_size, overlap=overlap)
             for i, chunk in enumerate(chunks):
                 docs.append(chunk.strip())
                 metadata.append({
@@ -269,7 +269,7 @@ def build_index(data_folder="data"):
                     text = f.read()
             except Exception:
                 continue
-            chunks = chunk_text(text, chunk_size=150, overlap=10)
+            chunks = chunk_text(text, chunk_size=chunk_size, overlap=overlap)
             for chunk in chunks:
                 if chunk.strip():
                     docs.append(chunk.strip())
@@ -283,8 +283,29 @@ def build_index(data_folder="data"):
 
     # === 3. Use singleton HuggingFaceEmbeddings (SAFE on CPU) ===
     embedder = get_embedding_wrapper()
-    embeddings = embedder.embed_documents(docs)
-    embeddings = np.array(embeddings, dtype=np.float32)
+
+    # Compute embeddings in batches to reduce peak memory and allow progress reporting
+    all_embeddings = []
+    total = len(docs)
+    if hasattr(st, "progress"):
+        progress_bar = st.progress(0)
+    else:
+        progress_bar = None
+
+    for i in range(0, total, batch_size):
+        batch = docs[i : i + batch_size]
+        try:
+            batch_emb = embedder.embed_documents(batch)
+        except Exception:
+            # Fallback: try smaller batch or single documents
+            batch_emb = []
+            for doc in batch:
+                batch_emb.append(embedder.embed_documents([doc])[0])
+        all_embeddings.extend(batch_emb)
+        if progress_bar is not None:
+            progress_bar.progress(min(1.0, (i + len(batch)) / max(1, total)))
+
+    embeddings = np.array(all_embeddings, dtype=np.float32)
 
     dim = embeddings.shape[1]
     index = faiss.IndexFlatIP(dim)
@@ -473,13 +494,12 @@ def list_mysql_tables():
 
 def get_retriever_tool(docs, metadata, memory=None):
     # Use a local retriever that reuses a persisted FAISS index when available
-    class LocalRetriever:
-        def __init__(self, index, docs, metadata, embedder, k=4):
-            self.index = index
-            self.docs = docs
-            self.metadata = metadata
-            self.embedder = embedder
-            self.k = k
+    class LocalRetriever(BaseRetriever):
+        index: Any
+        docs: List[str]
+        metadata: List[Dict]
+        embedder: Any
+        k: int = 4
 
         def get_relevant_documents(self, query):
             try:
