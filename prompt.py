@@ -81,7 +81,7 @@ When answering queries about different types of orders, use these rules to fetch
 
 
 - **Table Rules for Purchase Invoices (tbl_inventory_purchases):**
-When answering queries about invoices, fetch data from `tbl_inventory_purchases`.
+When answering queries about purchase invoices, fetch data from `tbl_inventory_purchases`.
 - **Fetch from tbl_inventory_purchase_items for invoice line items.
 - **To get product name, join with `tbl_stock_products` on `Product_ID`.
 - **Sold quantity is in the 'Item_Quantity' column.
