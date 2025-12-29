@@ -355,7 +355,11 @@ def get_mysql_tool(memory=None, db_uri=None):
     engine = create_engine(db_uri)
     inspector = inspect(engine)
     existing_tables = inspector.get_table_names()
-    db = SQLDatabase.from_uri(db_uri, include_tables=existing_tables, sample_rows_in_table_info=3, custom_table_info=table_info)
+    db = SQLDatabase.from_uri(
+        db_uri,
+        include_tables=existing_tables,
+        sample_rows_in_table_info=3
+    )    
     system_message = SystemMessage(content=SYSTEM_PROMPT)
     sql_agent_executor = create_sql_agent(
         llm=llm,
