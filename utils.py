@@ -354,17 +354,10 @@ def get_mysql_tool(memory=None, db_uri=None):
 
     engine = create_engine(db_uri)
     inspector = inspect(engine)
-
-    bad_tables = []
-
-    for t in inspector.get_table_names():
-        try:
-            inspector.get_columns(t)
-        except Exception as e:
-            bad_tables.append((t, str(e)))
-
-    st.write("❌ Tables that break inspection:", bad_tables)
     existing_tables = inspector.get_table_names()
+
+    st.write("Tables LangChain sees:", existing_tables)
+    st.write("custom_table_info keys:", list(table_info.keys()))
     db = SQLDatabase.from_uri(
         db_uri,
         include_tables=existing_tables,
