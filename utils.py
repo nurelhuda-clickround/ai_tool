@@ -56,7 +56,7 @@ if not os.getenv("OPENAI_API_KEY"):
 # MYSQL_DATABASE = os.getenv("MYSQL_DATABASE")
 # MYSQL_PORT = os.getenv("MYSQL_PORT", "3306")
 
-MYSQL_HOST='https://veggiesmart.sct-lb.net/'
+MYSQL_HOST='veggiesmart.sct-lb.net/'
 MYSQL_USER='hxaveggies_user'
 MYSQL_PASSWORD='hxaveggies_user_pass'
 MYSQL_DATABASE='hxaveggies_db'
