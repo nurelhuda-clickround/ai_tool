@@ -54,11 +54,11 @@ if not os.getenv("OPENAI_API_KEY"):
 # MYSQL_PASSWORD='hxaveggies_user_pass'
 # MYSQL_DATABASE='hxaveggies_db'
 # MYSQL_PORT=3306
-# MYSQL_HOST = st.secrets["mysql"]["MYSQL_HOST"]
-# MYSQL_USER = st.secrets["mysql"]["MYSQL_USER"]
-# MYSQL_PASSWORD = st.secrets["mysql"]["MYSQL_PASSWORD"]
-# MYSQL_DATABASE = st.secrets["mysql"]["MYSQL_DATABASE"]
-# MYSQL_PORT = st.secrets["mysql"]["MYSQL_PORT"]
+MYSQL_HOST = st.secrets["mysql"]["MYSQL_HOST"]
+MYSQL_USER = st.secrets["mysql"]["MYSQL_USER"]
+MYSQL_PASSWORD = st.secrets["mysql"]["MYSQL_PASSWORD"]
+MYSQL_DATABASE = st.secrets["mysql"]["MYSQL_DATABASE"]
+MYSQL_PORT = st.secrets["mysql"]["MYSQL_PORT"]
 # MYSQL_HOST = os.environ.get("MYSQL_HOST")
 # MYSQL_PORT = int(os.environ.get("MYSQL_PORT", 3306))
 # MYSQL_USER = os.environ.get("MYSQL_USER")
