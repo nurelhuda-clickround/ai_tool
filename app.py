@@ -94,13 +94,13 @@ st.markdown("""
         gap: 0.1rem;
     }
     /* Force readable text on light background */
-    .stApp,
-    .stApp p,
-    .stApp span,
-    .stApp label,
-    .stApp div {
-        color: #1a202c !important;
-    }
+    # .stApp,
+    # .stApp p,
+    # .stApp span,
+    # .stApp label,
+    # .stApp div {
+    #     color: #1a202c !important;
+    # }
     /* Spinner text */
     [data-testid="stSpinner"] div {
         color: #1a202c !important;
