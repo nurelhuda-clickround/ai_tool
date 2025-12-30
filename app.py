@@ -31,6 +31,9 @@ st.markdown("""
 # -------------------------
 st.markdown("""
     <style>
+    :root {
+        color-scheme: light;
+    }
     .stApp { background-color: #f0f4f8; font-family: 'Inter', sans-serif; }
     .main-title { color: #006d77; font-size: 2.3em; text-align: start; margin-bottom: 0.2em; }
     .subtitle { color: #4a5568; font-size: 1.1em; text-align: start; margin-bottom: 1.5em; }
@@ -89,6 +92,24 @@ st.markdown("""
     }
     .st-emotion-cache-1permvm {
         gap: 0.1rem;
+    }
+    /* Force readable text on light background */
+    .stApp,
+    .stApp p,
+    .stApp span,
+    .stApp label,
+    .stApp div {
+        color: #1a202c !important;
+    }
+    /* Spinner text */
+    [data-testid="stSpinner"] div {
+        color: #1a202c !important;
+    }
+    .stButton > button {
+        color: #ffffff !important;
+    }
+    [data-testid="stSidebar"] button {
+        color: #ffffff !important;
     }
     </style>
 """, unsafe_allow_html=True)
