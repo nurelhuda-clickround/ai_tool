@@ -8,7 +8,7 @@ env/
 
 # Ignore environment variables
 .env
-.db
+
 
 # Ignore IDE/editor settings
 .vscode/

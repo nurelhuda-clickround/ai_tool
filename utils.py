@@ -30,7 +30,7 @@ from typing import Dict, Any, List
 import pathlib
 import threading
 from sqlalchemy import create_engine, inspect
-
+# import pymysql
 secret_path = "/etc/secrets/OPENAI_API_KEY"
 if os.path.exists(secret_path):
     with open(secret_path) as f:
@@ -40,20 +40,20 @@ if os.path.exists(secret_path):
 if not os.getenv("OPENAI_API_KEY"):
     st.warning("OPENAI_API_KEY is missing at runtime. LLM features will be disabled until configured.")
 # Load environment variables from .env file
-load_dotenv()
+# load_dotenv()
 
 # Access MySQL credentials
-MYSQL_HOST = os.getenv("MYSQL_HOST")
-MYSQL_USER = os.getenv("MYSQL_USER")
-MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD")
-MYSQL_DATABASE = os.getenv("MYSQL_DATABASE")
-MYSQL_PORT = os.getenv("MYSQL_PORT", "3306")
+# MYSQL_HOST = os.getenv("MYSQL_HOST")
+# MYSQL_USER = os.getenv("MYSQL_USER")
+# MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD")
+# MYSQL_DATABASE = os.getenv("MYSQL_DATABASE")
+# MYSQL_PORT = os.getenv("MYSQL_PORT", "3306")
 
-MYSQL_HOST='veggiesmart.sct-lb.net'
-MYSQL_USER='hxaveggies_user'
-MYSQL_PASSWORD='hxaveggies_user_pass'
-MYSQL_DATABASE='hxaveggies_db'
-MYSQL_PORT=3306
+# MYSQL_HOST='veggiesmart.sct-lb.net'
+# MYSQL_USER='hxaveggies_user'
+# MYSQL_PASSWORD='hxaveggies_user_pass'
+# MYSQL_DATABASE='hxaveggies_db'
+# MYSQL_PORT=3306
 # MYSQL_HOST = st.secrets["mysql"]["MYSQL_HOST"]
 # MYSQL_USER = st.secrets["mysql"]["MYSQL_USER"]
 # MYSQL_PASSWORD = st.secrets["mysql"]["MYSQL_PASSWORD"]
@@ -73,25 +73,25 @@ MYSQL_PORT=3306
 #     "MYSQL_PASSWORD": "SET" if MYSQL_PASSWORD else None
 # })
 
-try:
-    socket.gethostbyname(MYSQL_HOST)
-    st.success("DNS resolved OK")
-except Exception as e:
-    st.error(f"DNS resolution failed: {e}")
+# try:
+#     socket.gethostbyname(MYSQL_HOST)
+#     st.success("DNS resolved OK")
+# except Exception as e:
+#     st.error(f"DNS resolution failed: {e}")
 
-try:
-    conn = pymysql.connect(
-        host=MYSQL_HOST,
-        user=MYSQL_USER,
-        password=MYSQL_PASSWORD,
-        database=MYSQL_DATABASE,
-        port=int(MYSQL_PORT),
-        connect_timeout=10
-    )
-    st.success("Raw PyMySQL connection successful")
-    conn.close()
-except Exception as e:
-    st.error(f"PyMySQL connection failed: {e}")
+# try:
+#     conn = pymysql.connect(
+#         host=MYSQL_HOST,
+#         user=MYSQL_USER,
+#         password=MYSQL_PASSWORD,
+#         database=MYSQL_DATABASE,
+#         port=int(MYSQL_PORT),
+#         connect_timeout=10
+#     )
+#     st.success("Raw PyMySQL connection successful")
+#     conn.close()
+# except Exception as e:
+#     st.error(f"PyMySQL connection failed: {e}")
 # Access API credentials
 # API_BASE_URL = os.getenv("API_BASE_URL", "http://192.168.10.82/hxa/ai_api/index.php")
 # API_KEY = os.getenv("API_KEY")
