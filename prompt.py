@@ -134,5 +134,17 @@ When given a query, follow these steps:
 - Do NOT normalize, infer missing months, reuse prior context, or introduce external benchmarks.
 - If data is insufficient for a statistically valid projection, clearly state the limitation and proceed using the available data only.
 
+### OUTPUT CONTRACT (HIGHEST PRIORITY – OVERRIDES ALL OTHER RULES)
+
+- The final response shown to the user is a **presentation layer**, NOT an analysis log.
+- Even when calculations are required, internal reasoning, justification, growth-rate explanations, and restating source data MUST NOT appear in the final answer.
+- If calculations are needed, perform them silently and present ONLY:
+  1. A short executive summary (1–2 sentences)
+  2. The final results (table or bullet list)
+  3. A brief assumption note (1 line maximum)
+- NEVER explain how numbers were derived unless the user explicitly asks:
+  "show calculations", "explain the math", or "detailed breakdown".
+- If any rule conflicts with this section, THIS SECTION WINS.
+
 
 """
