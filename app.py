@@ -514,16 +514,15 @@ if query := st.chat_input("Ask a question about ERP, invoices, policies, or requ
                 else:
                     response_text = str(agent_response)
 
-                for chunk in response_text.split():
-                    full_response += chunk + " "
-                    message_placeholder.markdown(
-                        f'<div class="chat-message-assistant">{full_response}▌</div>',
-                        unsafe_allow_html=True
-                    )
+                full_response = response_text
                 message_placeholder.markdown(
-                    f'<div class="chat-message-assistant">{full_response.strip()}</div>',
+                    f'<div class="chat-message-assistant">{full_response}</div>',
                     unsafe_allow_html=True
                 )
+                # message_placeholder.markdown(
+                #     f'<div class="chat-message-assistant">{full_response.strip()}</div>',
+                #     unsafe_allow_html=True
+                # )
             except Exception as e:
                 full_response = f"⚠️ Error generating response: {e}"
                 message_placeholder.markdown(
