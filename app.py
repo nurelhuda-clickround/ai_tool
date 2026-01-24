@@ -410,7 +410,7 @@ if "agent" not in st.session_state:
             for f in os.listdir("data"):
                 file_path = os.path.join("data", f)
                 if f.endswith((".xlsx", ".xls")):
-                    load_excel_to_db(file_path)
+                    df, table_name = load_excel_to_db(file_path)
             docs, meta, faiss_index = build_index("data")
             st.session_state.agent = get_multi_agent(None, docs, meta, conversation_history=all_history)
     else:
@@ -508,7 +508,20 @@ if query := st.chat_input("Ask a question about ERP, invoices, policies, or requ
         message_placeholder = st.empty()
         with st.spinner("🧠 Thinking..."):
             try:
-                agent_response = st.session_state.agent.invoke({"input": conversation_str})
+                doc_hint = st.session_state.get("last_uploaded_doc")
+
+                final_input = conversation_str
+
+                if doc_hint:
+                    final_input = (
+                        f"The report to use is '{doc_hint}'.\n\n"
+                        f"{conversation_str}"
+                    )
+
+                agent_response = st.session_state.agent.invoke({
+                    "input": final_input
+                })
+                print(agent_response)
                 if isinstance(agent_response, dict):
                     response_text = agent_response.get("output", agent_response.get("answer", str(agent_response)))
                 else:
@@ -644,22 +657,37 @@ with st.container():
     )
 
 if uploaded_files:
-    new_files = [f for f in uploaded_files if f.name not in [uf.name for uf in st.session_state.get("uploaded_files", [])]]
+    new_files = [
+        f for f in uploaded_files
+        if f.name not in [uf.name for uf in st.session_state.get("uploaded_files", [])]
+    ]
+
     if new_files:
         os.makedirs("data", exist_ok=True)
+
         for f in new_files:
             file_path = os.path.join("data", f.name)
             with open(file_path, "wb") as out:
                 out.write(f.getbuffer())
-            
+
             if file_path.endswith((".xlsx", ".xls")):
                 with st.spinner(f"📊 Loading {f.name} into database..."):
                     load_excel_to_db(file_path)
-        
-        st.session_state.uploaded_files = st.session_state.get("uploaded_files", []) + new_files
+
+            # 🔴 NEW — store the most recently uploaded document name
+            st.session_state.last_uploaded_doc = f.name
+
+        st.session_state.uploaded_files = (
+            st.session_state.get("uploaded_files", []) + new_files
+        )
+
         st.success("✅ Files uploaded and data loaded successfully! Re-indexing...")
 
         with st.spinner("🔄 Re-indexing with uploaded documents..."):
             docs, meta, faiss_index = build_index("data")
-            st.session_state.agent = get_multi_agent(None, docs, meta,conversation_history=all_history)
-
+            st.session_state.agent = get_multi_agent(
+                None,
+                docs,
+                meta,
+                conversation_history=all_history
+            )

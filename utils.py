@@ -49,11 +49,7 @@ if not os.getenv("OPENAI_API_KEY"):
 # MYSQL_DATABASE = os.getenv("MYSQL_DATABASE")
 # MYSQL_PORT = os.getenv("MYSQL_PORT", "3306")
 
-# MYSQL_HOST='veggiesmart.sct-lb.net'
-# MYSQL_USER='hxaveggies_user'
-# MYSQL_PASSWORD='hxaveggies_user_pass'
-# MYSQL_DATABASE='hxaveggies_db'
-# MYSQL_PORT=3306
+
 MYSQL_HOST = st.secrets["mysql"]["MYSQL_HOST"]
 MYSQL_USER = st.secrets["mysql"]["MYSQL_USER"]
 MYSQL_PASSWORD = st.secrets["mysql"]["MYSQL_PASSWORD"]
@@ -64,50 +60,6 @@ MYSQL_PORT = st.secrets["mysql"]["MYSQL_PORT"]
 # MYSQL_USER = os.environ.get("MYSQL_USER")
 # MYSQL_PASSWORD = os.environ.get("MYSQL_PASSWORD")
 # MYSQL_DATABASE = os.environ.get("MYSQL_DATABASE")
-
-# st.write({
-#     "MYSQL_HOST": MYSQL_HOST,
-#     "MYSQL_PORT": MYSQL_PORT,
-#     "MYSQL_USER": MYSQL_USER,
-#     "MYSQL_DATABASE": MYSQL_DATABASE,
-#     "MYSQL_PASSWORD": "SET" if MYSQL_PASSWORD else None
-# })
-
-# try:
-#     socket.gethostbyname(MYSQL_HOST)
-#     st.success("DNS resolved OK")
-# except Exception as e:
-#     st.error(f"DNS resolution failed: {e}")
-
-# try:
-#     conn = pymysql.connect(
-#         host=MYSQL_HOST,
-#         user=MYSQL_USER,
-#         password=MYSQL_PASSWORD,
-#         database=MYSQL_DATABASE,
-#         port=int(MYSQL_PORT),
-#         connect_timeout=10
-#     )
-#     st.success("Raw PyMySQL connection successful")
-#     conn.close()
-# except Exception as e:
-#     st.error(f"PyMySQL connection failed: {e}")
-# Access API credentials
-# API_BASE_URL = os.getenv("API_BASE_URL", "http://192.168.10.82/hxa/ai_api/index.php")
-# API_KEY = os.getenv("API_KEY")
-# db_user = st.secrets["mysql"]["MYSQL_USER"] 
-# db_password = st.secrets["mysql"]["MYSQL_PASSWORD"] 
-# db_host = st.secrets["mysql"]["MYSQL_HOST"] 
-# db_port = st.secrets["mysql"]["MYSQL_PORT"] 
-# db_name = st.secrets["mysql"]["MYSQL_DATABASE"]
-# Access OpenAI API key
-# api_key = os.getenv("OPENAI_API_KEY")
-# os.environ["OPENAI_API_KEY"] = api_key
-
-# Initialize SentenceTransformer
-# embedder = SentenceTransformer('all-MiniLM-L6-v2', device='cpu')
-
-# heavy imports moved into functions to reduce cold-start time
 
 
 @st.cache_resource
@@ -124,7 +76,7 @@ def get_llm(model: str = "gpt-4.1-nano", temperature: float = 0):
     if not os.getenv("OPENAI_API_KEY"):
         raise RuntimeError("OPENAI_API_KEY not set; call get_llm() after configuring the key")
 
-    _LLM_SINGLETON = ChatOpenAI(model=model, temperature=temperature)
+    _LLM_SINGLETON = ChatOpenAI(model=model, temperature=temperature,max_tokens=512)
     return _LLM_SINGLETON
 
 
@@ -205,7 +157,7 @@ def get_cpu_huggingface_embeddings(
     from langchain.embeddings import HuggingFaceEmbeddings
 
     return HuggingFaceEmbeddings(
-        model_name=model_name,
+        model_name="sentence-transformers/all-MiniLM-L6-v2",
         model_kwargs={"device": "cpu"},
         encode_kwargs={"normalize_embeddings": True},
     )
@@ -326,10 +278,11 @@ def build_index(data_folder="data", chunk_size: int = 300, overlap: int = 20, ba
                 file_emb = np.load(paths["emb"])
             except Exception:
                 use_cache = False
-
+        print(use_cache)
         if not use_cache:
             # extract text and chunk depending on filetype
             if file.lower().endswith(".pdf"):
+                print("i am pdf")
                 text = extract_text_from_pdf(file_path)
                 chunks = chunk_text(text, chunk_size=chunk_size, overlap=overlap)
                 file_docs = [c.strip() for c in chunks if c.strip()]
@@ -418,75 +371,6 @@ def build_index(data_folder="data", chunk_size: int = 300, overlap: int = 20, ba
 
     return doc_list, meta_list, index
 
-# def get_api_tool(memory=None):
-#     """
-#     ERP API tool that dynamically fetches raw JSON data.
-#     No counts, sums, or aggregations are computed in the code.
-#     The LLM must interpret the raw JSON itself to compute counts, sums, maximums, or any other metrics.
-#     """
-#     def call_api(query: str) -> str:
-#         try:
-#             # Step 1: Ask LLM which endpoints to call
-#             classification_prompt = f"""
-#                 You are a strict JSON generator.
-#                 Return ONLY a JSON list (no text, no explanation).
-#                 Options: {list(API_ENDPOINTS.keys())}
-#                 Query: {query}
-#                 Example: ["invoices", "sales_orders"]
-#                 """
-#             classification = llm.invoke(classification_prompt).content.strip()
-#             try:
-#                 endpoints = json.loads(classification)
-#             except json.JSONDecodeError:
-#                 return "No relevant data found in the sources."
-
-#             if not endpoints:
-#                 return "No relevant data found in the sources."
-
-#             # Step 2: Call all selected endpoints
-#             results = {}
-#             for endpoint in endpoints:
-#                 if endpoint not in API_ENDPOINTS:
-#                     results[endpoint] = {"error": f"Endpoint {endpoint} not found."}
-#                     continue
-
-#                 config = API_ENDPOINTS[endpoint]
-#                 headers = {
-#                     "Authorization": f"Bearer {API_KEY}" if API_KEY else "",
-#                     "API-Key": API_KEY if API_KEY else "",
-#                     "Content-Type": "application/json"
-#                 }
-
-#                 try:
-#                     response = requests.get(config["url"], headers=headers, timeout=10)
-#                     response.raise_for_status()
-#                     data = response.json()
-#                     results[endpoint] = data
-#                 except requests.exceptions.RequestException as e:
-#                     results[endpoint] = {"error": f"API unavailable for {endpoint}: {str(e)}"}
-
-#             # Step 3: Hand raw data directly to LLM
-#             llm_prompt =  f"""
-#                 JSON DATA: {json.dumps(results)}
-
-#                 Question: {query}
-
-#                 Fill all numeric fields exactly from the JSON provided. 
-#                 Do not skip any entries. Do not summarize. 
-#                 explain the result.
-#                 """
-#             answer = llm.invoke(llm_prompt).content.strip()
-#             return f"FINAL_ANSWER: {answer}"
-
-#         except Exception as e:
-#             return f"Unexpected error in API tool: {str(e)}"
-
-#     return Tool(
-#         name="erp_api_tool",
-#         func=call_api,
-#         description="Fetches raw ERP data (JSON). No pre-computed metrics — the AI must compute counts, sums, maximums, etc. dynamically."
-#     )
-
 def get_sqlite_tool(memory=None):
     db = SQLDatabase.from_uri("sqlite:///structured_data.db")
     system_message = SystemMessage(content=SYSTEM_PROMPT)
@@ -499,9 +383,14 @@ def get_sqlite_tool(memory=None):
         agent_kwargs={"system_message": system_message}
     )
 
+    def _sqlite_tool_wrapper(q):
+        q = normalize_query(q)
+        result = sql_agent_executor.invoke({"input": q})
+        return result.get("output", "")
+
     return Tool(
         name="sqlite_tool",
-        func=sql_agent_executor.run,
+        func=_sqlite_tool_wrapper,
         description="Answer questions related to user's chat history stored in SQLite."
     )
 
@@ -577,7 +466,9 @@ def get_mysql_tool(memory=None, db_uri=None):
                 agent_kwargs={"system_message": system_message}
             )
 
-            return sql_agent_executor.run(query)
+            q = normalize_query(query)
+            result = sql_agent_executor.invoke({"input": q})
+            return result.get("output", "")
         except Exception as e:
             return f"MySQL tool error: {e}"
 
@@ -596,15 +487,17 @@ def list_mysql_tables():
     print("Tables in DB:", inspector.get_table_names())
 
 def get_retriever_tool(docs, metadata, memory=None):
+    print("hi retriever tool called")
     # Use a local retriever that reuses a persisted FAISS index when available
     class LocalRetriever(BaseRetriever):
-        index: Any
-        docs: List[str]
-        metadata: List[Dict]
-        embedder: Any
+        index: any
+        docs: list
+        doc_metadata: list  # Renamed from 'metadata' to avoid shadowing parent class
+        embedder: any
         k: int = 4
 
         def get_relevant_documents(self, query):
+            query = normalize_query(query)
             try:
                 q_emb = self.embedder.embed_query(query)
             except Exception:
@@ -616,47 +509,146 @@ def get_retriever_tool(docs, metadata, memory=None):
 
             D, I = self.index.search(q_emb, self.k)
             results = []
+
             for idx in I[0]:
                 if idx < len(self.docs):
-                    results.append(Document(page_content=self.docs[idx], metadata=self.metadata[idx]))
+                    # Ensure metadata is a dict with only strings
+                    meta = {k: str(v) if v is not None else "" for k, v in self.doc_metadata[idx].items()}
+                    results.append(Document(page_content=self.docs[idx], metadata=meta))
             return results
 
+    
     # Build or load index (fast when persisted). Use cached global index when possible.
     file_hashes = _compute_file_hashes("data")
     file_sig = json.dumps(file_hashes, sort_keys=True)
 
-    docs_cached, meta_cached, index = cached_build_index(file_sig, data_folder="data")
+    docs_cached, meta_cached, index = build_index("data")
+    print("📦 Index diagnostics")
+    print("Docs:", len(docs_cached))
+    print("Meta:", len(meta_cached))
+    print("Index ntotal:", index.ntotal if index else None)
 
     # If a session memory is provided, do NOT cache QA chain (avoid caching with memory)
+    # But we still don't pass memory to RetrievalQA - let the outer agent handle memory
     if memory is not None:
         import faiss
         embedding = get_embedding_wrapper()
-        retr = LocalRetriever(index=index, docs=docs_cached, metadata=meta_cached, embedder=embedding)
-        qa_chain = RetrievalQA.from_chain_type(llm=get_llm(), retriever=retr, memory=memory, return_source_documents=False)
-        return Tool(name="document_retriever", func=qa_chain.run, description="Document retriever (non-cached, per-session memory)")
+        retr = LocalRetriever(index=index, docs=docs_cached, doc_metadata=meta_cached, embedder=embedding)
+        
+        def document_retriever_tool(query: str) -> str:
+            query = normalize_query(query)
+            try:
+                # Directly use retriever + LLM, skip RetrievalQA to avoid memory issues
+                docs_list = retr.get_relevant_documents(query)
+                if not docs_list:
+                    return "No relevant documents found."
+                
+                context = "\n".join([doc.page_content for doc in docs_list])
+                
+                # Use LLM directly to answer based on retrieved context
+                from langchain_core.prompts import PromptTemplate
+                prompt = PromptTemplate(
+                    template="Based on the following context:\n{context}\n\nAnswer this question: {question}",
+                    input_variables=["context", "question"]
+                )
+                chain = prompt | get_llm()
+                result = chain.invoke({"context": context, "question": query})
+                return str(result)
+            except Exception as e:
+                print(f"Error in document_retriever_tool: {e}")
+                import traceback
+                traceback.print_exc()
+                return "⚠️ Could not retrieve answer from documents."
+
+        return Tool(
+            name="document_retriever",
+            func=document_retriever_tool,
+            description="Document retriever (per-session memory)"
+        )
 
     # memory is None -> safe to cache QA chain globally
     cached = st.session_state.get("qa_chain")
     if cached and getattr(cached, "_index_sig", None) == file_sig:
-        return Tool(name="document_retriever", func=cached.run, description="Cached document retriever")
+        # cached is a retriever, not a chain
+        def document_retriever_tool(query: str) -> str:
+            query = normalize_query(query)
+            try:
+                # Directly use retriever + LLM, skip RetrievalQA to avoid memory issues
+                docs_list = cached.get_relevant_documents(query)
+                if not docs_list:
+                    return "No relevant documents found."
+                
+                context = "\n".join([doc.page_content for doc in docs_list])
+                
+                # Use LLM directly to answer based on retrieved context
+                from langchain_core.prompts import PromptTemplate
+                prompt = PromptTemplate(
+                    template="Based on the following context:\n{context}\n\nAnswer this question: {question}",
+                    input_variables=["context", "question"]
+                )
+                chain = prompt | get_llm()
+                result = chain.invoke({"context": context, "question": query})
+                return str(result)
+            except Exception as e:
+                print(f"Error in document_retriever_tool: {e}")
+                import traceback
+                traceback.print_exc()
+                return "⚠️ Could not retrieve answer from documents."
+
+        return Tool(
+            name="document_retriever",
+            func=document_retriever_tool,
+            description="Cached document retriever"
+        )
 
     @st.cache_resource
-    def _build_qa_chain(index_hash: str):
+    def _build_retriever(index_hash: str):
         import faiss
         embedding = get_embedding_wrapper()
-        retr = LocalRetriever(index=index, docs=docs_cached, metadata=meta_cached, embedder=embedding)
-        qa = RetrievalQA.from_chain_type(llm=get_llm(), retriever=retr, memory=None, return_source_documents=False)
-        qa._index_sig = index_hash
-        return qa
+        retr = LocalRetriever(index=index, docs=docs_cached, doc_metadata=meta_cached, embedder=embedding)
+        retr._index_sig = index_hash
+        return retr
 
-    qa_chain = _build_qa_chain(file_sig)
-    st.session_state["qa_chain"] = qa_chain
+    retriever = _build_retriever(file_sig)
+    
+    # Store retriever in session state for potential reuse
+    st.session_state["qa_chain"] = retriever
+
+    # 🔑 TOOL CLOSURE — retriever is captured here
+    def document_retriever_tool(query: str) -> str:
+        query = normalize_query(query)
+        try:
+            # Directly use retriever + LLM, skip RetrievalQA to avoid memory issues
+            docs_list = retriever.get_relevant_documents(query)
+            if not docs_list:
+                return "No relevant documents found."
+            
+            context = "\n".join([doc.page_content for doc in docs_list])
+            
+            # Use LLM directly to answer based on retrieved context
+            from langchain_core.prompts import PromptTemplate
+            prompt = PromptTemplate(
+                template="Based on the following context:\n{context}\n\nAnswer this question: {question}",
+                input_variables=["context", "question"]
+            )
+            chain = prompt | get_llm()
+            result = chain.invoke({"context": context, "question": query})
+            return str(result)
+        except Exception as e:
+            print(f"Error in document_retriever_tool: {e}")
+            import traceback
+            traceback.print_exc()
+            return "⚠️ Could not retrieve answer from documents."
+
+    
+    st.session_state["qa_chain"] = retriever
 
     return Tool(
         name="document_retriever",
-        func=qa_chain.run,
+        func=document_retriever_tool,
         description="Useful for answering questions from resumes, documents, or ERP policies. (cached)"
     )
+
 def get_multi_agent(_, docs, metadata, db_uri=None, memory=None, conversation_history=None):
     if memory is None:
         memory = ConversationBufferMemory(return_messages=True, memory_key="chat_history")
@@ -680,7 +672,7 @@ def get_multi_agent(_, docs, metadata, db_uri=None, memory=None, conversation_hi
                 f"mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}"
                 f"@{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DATABASE}"
             )
-        tools.insert(0, get_mysql_tool(memory, db_uri))
+        tools.append(get_mysql_tool(memory, db_uri))
 
     return initialize_agent(
         tools=tools,
@@ -953,16 +945,25 @@ def cleanup_generated_files(directory="."):
 
 def load_excel_to_db(excel_path, db_uri="sqlite:///structured_data.db"):
     table_name = os.path.splitext(os.path.basename(excel_path))[0]
+
     import pandas as pd
     from sqlalchemy import create_engine
 
     df = pd.read_excel(excel_path)
     df = df.fillna("")
 
+    df.columns = (
+        df.columns
+          .astype(str)
+          .str.strip()
+          .str.replace(r"\s+", " ", regex=True)
+    )
+
     engine = create_engine(db_uri)
-    df.to_sql(table_name, engine, if_exists='replace', index=False)
-    
+    df.to_sql(table_name, engine, if_exists="replace", index=False)
+
     return df, table_name
+
 
 def build_full_user_history(username):
     if not username:
@@ -999,3 +1000,8 @@ def initialize_session_state():
                     st.session_state.memory.chat_memory.add_user_message(msg["content"])
                 elif msg["role"] == "assistant":
                     st.session_state.memory.chat_memory.add_ai_message(msg["content"])
+
+def normalize_query(q):
+    if isinstance(q, dict):
+        return q.get("query") or q.get("input") or str(q)
+    return str(q)
