@@ -105,12 +105,18 @@ guessing.
 - Sold quantity is in `Product_Quantity`.
 - Invoice number = `invoice_prefix` (if available) concatenated with
   `Invoice_ID`, e.g. `SH12`.
+  - Join `tbl_common_currency` on `Invoice_Currency` to get the currency symbol — always
+  join it whenever `Invoice_Currency` appears; never return only `Invoice_Currency`.
 
 ### Orders (tbl_purchase_order)
 - Sales Orders: `is_sales = 1` and `is_quotation = 0`
 - Purchase Orders: `is_sales = 0` and `is_quotation = 0`
 - Sales Quotations: `is_sales = 1` and `is_quotation = 1`
 - Purchase Quotations: `is_sales = 0` and `is_quotation = 1`
+
+### Returns (tbl_accounting_return_invoices)
+- Sales Return: `Is_Customer_Invoice = 1` 
+- Purchase Return: `Is_Customer_Invoice = 0`
 
 ### Purchase invoices (tbl_inventory_purchases)
 - Line items come from `tbl_inventory_purchase_items`.
