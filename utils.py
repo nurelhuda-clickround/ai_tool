@@ -410,29 +410,86 @@ def generate_table_info(engine):
 def get_mysql_tool(memory=None, db_uri=None):
     if db_uri is None:
         db_uri = f"mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DATABASE}"
-    # The tool function is lazy: it will create DB engine and SQL agent only when invoked.
-    table_info = {
-        "tbl_purchase_order": """
-        ### tbl_purchase_order
-        - This table contains all order data.
-        - Sales Orders: is_sales = 1
-        - Purchase Orders: is_sales = 0 and is_quotation = 0
-        - Quotations: is_quotation = 1
-        """,
-        "tbl_invoices": """
-        ### tbl_invoices
-        - Contains invoice information.
-        """,
-        "tbl_invoice_products_details": """
-        ### tbl_invoice_products_details
-        - Contains invoice line items with Product_ID and Product_Quantity.
-        - Must join with tbl_stock_products to get Product_Name for Product_ID.
-        """,
-        "tbl_stock_products": """
-        ### tbl_stock_products
-        - Contains product information with Product_ID and Product_Name.
-        """,
-    }
+
+    # Every table referenced anywhere in prompt.py's business rules must be
+    # listed here. Anything not on this list is invisible to the SQL agent
+    # -- it will report a real, existing table as "does not exist" if it's
+    # missing from ALLOWED_TABLES. Add a table here the moment a new
+    # business rule in prompt.py references it.
+    ALLOWED_TABLES = [
+        "tbl_invoices",
+        "tbl_invoice_products_details",
+        "tbl_purchase_order",
+        "tbl_stock_products",
+        "tbl_accounting_return_invoices",
+        "tbl_common_currency",
+        "tbl_common_current_year",
+        "tbl_inventory_purchases",
+        "tbl_inventory_purchase_items",
+        "tbl_uom_conversions",
+        "tbl_stock_uom",
+    ]
+
+    def _call_mysql_tool(query: str) -> str:
+        try:
+            # lazy imports
+            from sqlalchemy import create_engine, inspect
+            from langchain_community.utilities import SQLDatabase
+            from langchain_community.agent_toolkits.sql.base import create_sql_agent
+            from langchain.schema import SystemMessage
+
+            engine = create_engine(db_uri, connect_args={"connect_timeout": 5})
+            inspector = inspect(engine)
+            existing_tables = set(inspector.get_table_names())
+
+            valid_tables = [t for t in ALLOWED_TABLES if t in existing_tables]
+
+            # If something on the list isn't actually in the live DB, don't
+            # fail silently -- log it so a renamed/dropped table gets caught
+            # immediately instead of surfacing later as a confusing answer.
+            missing = [t for t in ALLOWED_TABLES if t not in existing_tables]
+            if missing:
+                print(f"[mysql_tool] WARNING: expected tables not found in live DB: {missing}")
+
+            # No custom_table_info here on purpose: SQLDatabase will
+            # introspect the live database directly, so the agent always
+            # sees the real, current columns for every included table.
+            # The business logic that isn't obvious from column names alone
+            # (join keys, is_sales/is_quotation semantics, the revenue
+            # formula, etc.) already lives in prompt.py's business rules --
+            # duplicating a second, hand-maintained copy here is exactly
+            # what drifted out of sync before.
+            db = SQLDatabase.from_uri(
+                db_uri,
+                include_tables=valid_tables,
+                sample_rows_in_table_info=3,
+            )
+
+            system_message = SystemMessage(content=SYSTEM_PROMPT)
+            sql_agent_executor = create_sql_agent(
+                llm=get_llm(),
+                db=db,
+                agent_type=AgentType.OPENAI_FUNCTIONS,
+                memory=memory,
+                verbose=True,
+                agent_kwargs={"system_message": system_message}
+            )
+
+            q = normalize_query(query)
+            result = sql_agent_executor.invoke({"input": q})
+            return result.get("output", "")
+        except Exception as e:
+            return f"MySQL tool error: {e}"
+
+    return Tool(
+        name="mysql_tool",
+        func=_call_mysql_tool,
+        description=(
+            "Answer questions about live ERP data in MySQL: invoices, "
+            "purchase orders, purchase invoices, products, currency, and "
+            "UOM conversions."
+        ),
+    )
 
     def _call_mysql_tool(query: str) -> str:
         try:
