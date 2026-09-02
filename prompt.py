@@ -61,11 +61,11 @@ guessing.
 ### Revenue
 "Revenue" always means total income from invoices minus returns/refunds:
 
-    Revenue = SUM(tbl_invoices.current_rate * tbl_invoices.Invoice_Sub_Total)
+    Revenue = SUM(tbl_invoices.current_rate * tbl_invoices.Invoice_Net_Total)
               - SUM(tbl_accounting_return_invoices.current_rate
                     * tbl_accounting_return_invoices.Return_Invoice_Total)
 
-- Fetch `tbl_invoices.Invoice_Sub_Total` from `tbl_invoices` where
+- Fetch `tbl_invoices.Invoice_Net_Total` from `tbl_invoices` where
   `Invoice_Status <> 3`.
 - Fetch `tbl_accounting_return_invoices.current_rate *
   tbl_accounting_return_invoices.Return_Invoice_Total` from
@@ -74,7 +74,7 @@ guessing.
   `Invoice_ID` in `tbl_invoices`.
 - Retrieve the current financial year only unless specified otherwise, joined
   on `current_year_id` as described above.
-- Never use `SUM(tbl_invoices.Invoice_Sub_Total)` alone to answer a revenue
+- Never use `SUM(tbl_invoices.Invoice_Net_Total)` alone to answer a revenue
   question — always check and subtract refunds, even if they turn out to be
   zero. If `tbl_accounting_return_invoices` has no matching rows, subtract 0
   but still issue the query and state that no refunds were found.
