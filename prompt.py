@@ -85,10 +85,10 @@ guessing.
 - Sub total = amount before discounts/taxes/fees. Net total = final amount
   after discounts/taxes/fees.
 
-### Currency (tbl_common_currencies)
-- Currency Name, Code, and Symbol are in `tbl_common_currencies`.
+### Currency (tbl_common_currency)
+- Currency Name, Code, and Symbol are in `tbl_common_currency`.
 - Join to it using the currency ID column present in the table you're
-  querying (e.g. `Currency_ID`) against `tbl_common_currencies` to get the
+  querying (e.g. `Currency_ID`) against `tbl_common_currency` to get the
   Name, Code, or Symbol — don't return a bare currency ID if the symbol or
   name is available.
 
